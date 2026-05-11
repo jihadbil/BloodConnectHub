@@ -1,0 +1,322 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Blood Red Theme - Medical & Humanitarian */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+
+    /* Primary: Deep Blood Red */
+    --primary: 0 72% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: Warm Gray */
+    --secondary: 0 5% 96%;
+    --secondary-foreground: 0 0% 15%;
+
+    --muted: 0 5% 96%;
+    --muted-foreground: 0 0% 45%;
+
+    /* Accent: Lighter Red */
+    --accent: 0 65% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success Green for completed donations */
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning Orange for urgent requests */
+    --warning: 25 95% 53%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 0 10% 90%;
+    --input: 0 10% 90%;
+    --ring: 0 72% 45%;
+
+    --radius: 0.75rem;
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(0 72% 45%) 0%, hsl(0 65% 35%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(0 5% 98%) 100%);
+    --gradient-urgent: linear-gradient(135deg, hsl(0 72% 50%) 0%, hsl(25 95% 53%) 100%);
+
+    /* Shadows */
+    --shadow-sm: 0 2px 8px -2px hsl(0 0% 0% / 0.08);
+    --shadow-md: 0 8px 24px -4px hsl(0 0% 0% / 0.12);
+    --shadow-lg: 0 16px 48px -8px hsl(0 0% 0% / 0.15);
+    --shadow-glow: 0 0 40px -10px hsl(0 72% 45% / 0.4);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 0 0% 25%;
+    --sidebar-primary: 0 72% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 5% 95%;
+    --sidebar-accent-foreground: 0 0% 15%;
+    --sidebar-border: 0 10% 92%;
+    --sidebar-ring: 0 72% 45%;
+  }
+
+  .dark {
+    --background: 0 0% 7%;
+    --foreground: 0 0% 95%;
+
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 0 65% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 5% 15%;
+    --secondary-foreground: 0 0% 95%;
+
+    --muted: 0 5% 18%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 0 60% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 60% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 25 85% 48%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 0 5% 20%;
+    --input: 0 5% 20%;
+    --ring: 0 65% 55%;
+
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 0 65% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 5% 15%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 0 5% 18%;
+    --sidebar-ring: 0 65% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-cairo antialiased;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .gradient-card {
+    background: var(--gradient-card);
+  }
+
+  .gradient-urgent {
+    background: var(--gradient-urgent);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
+  }
+
+  /* Blood drop animation */
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px -5px hsl(0 72% 45% / 0.5);
+    }
+    50% {
+      box-shadow: 0 0 40px -5px hsl(0 72% 45% / 0.8);
+    }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes heartbeat {
+    0%, 100% {
+      transform: scale(1);
+    }
+    14% {
+      transform: scale(1.1);
+    }
+    28% {
+      transform: scale(1);
+    }
+    42% {
+      transform: scale(1.1);
+    }
+    56% {
+      transform: scale(1);
+    }
+  }
+
+  .animate-heartbeat {
+    animation: heartbeat 1.5s ease-in-out infinite;
+  }
+
+  /* Stats counter animation */
+  @keyframes count-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-count-up {
+    animation: count-up 0.6s ease-out forwards;
+  }
+
+  /* Card hover effects */
+  .card-hover {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .card-hover:hover {
+    @apply -translate-y-1;
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* RTL Support */
+  [dir="rtl"] {
+    text-align: right;
+  }
+}
+
+@layer utilities {
+  .font-cairo {
+    font-family: 'Cairo', sans-serif;
+  }
+}
+
+/* ─────────────────────────────────────────────
+   Print Styles — Report Pages
+   ───────────────────────────────────────────── */
+@media print {
+  /* إخفاء عناصر التخطيط العامة */
+  header,
+  footer,
+  nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* خلفية بيضاء نظيفة */
+  body,
+  html {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+  }
+
+  /* إزالة الـ padding من الصفحة الرئيسية */
+  #root {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* تمديد محتوى التقرير ليملأ الصفحة */
+  .report-print-area {
+    max-width: 100% !important;
+    padding: 10mm 15mm !important;
+    margin: 0 !important;
+  }
+
+  /* إزالة الظلال من البطاقات */
+  .shadow-md,
+  .shadow-lg,
+  .shadow-sm {
+    box-shadow: none !important;
+  }
+
+  /* حدود خفيفة للبطاقات بدل الظلال */
+  [class*="Card"],
+  .card {
+    border: 1px solid #e5e7eb !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* تعديل شبكة العمودين لتصبح عمود واحد عند الطباعة */
+  .print-single-col {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* تجنب قطع الجداول */
+  table {
+    break-inside: auto;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* إخفاء أي عنصر مُعلَّم بـ no-print */
+  .no-print {
+    display: none !important;
+  }
+
+  /* عنوان التقرير */
+  .report-print-title {
+    font-size: 18pt;
+    font-weight: bold;
+    margin-bottom: 8mm;
+    border-bottom: 2px solid #dc2626;
+    padding-bottom: 4mm;
+  }
+
+  /* القائمة الدائرية (Pie/Bar) — تجنب قطعها */
+  .recharts-wrapper {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
