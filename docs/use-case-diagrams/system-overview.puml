@@ -1,0 +1,249 @@
+@startuml BloodConnectHub - System Overview Use Case Diagram
+
+!define RECTANGLE class
+
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam backgroundColor #FEFEFE
+
+title BloodConnectHub - System Overview Use Case Diagram
+
+' ============================================
+' Actors
+' ============================================
+:Guest: as guest
+:Donor: as donor
+:Staff: as staff
+:Admin: as admin
+actor System as system
+
+' Inheritance
+donor -up-|> guest
+staff -up-|> guest
+admin -up-|> staff
+
+' ============================================
+' Use Cases - Public Access
+' ============================================
+package "Public Access" #LightBlue {
+  usecase "View Home Page" as UC_Home
+  usecase "View Blood Requests" as UC_ViewRequests
+  usecase "View Urgent Requests" as UC_ViewUrgent
+  usecase "View About Page" as UC_About
+  usecase "View Contact Page" as UC_Contact
+  usecase "Login" as UC_Login
+  usecase "Register as Donor" as UC_RegisterDonor
+  usecase "Staff Login" as UC_StaffLogin
+  usecase "Staff Register" as UC_StaffRegister
+}
+
+' ============================================
+' Use Cases - Donor Functions
+' ============================================
+package "Donor Functions" #LightGreen {
+  usecase "View Donor Dashboard" as UC_DonorDashboard
+  usecase "View My Donations" as UC_MyDonations
+  usecase "Respond to Blood Request" as UC_RespondRequest
+  usecase "View My Responses" as UC_MyResponses
+  usecase "Update Response Status" as UC_UpdateResponse
+  usecase "Cancel Response" as UC_CancelResponse
+  usecase "View Profile" as UC_ViewProfile
+  usecase "Update Profile" as UC_UpdateProfile
+  usecase "Change Password" as UC_ChangePassword
+  usecase "View Notifications" as UC_ViewNotifications
+  usecase "Mark Notification as Read" as UC_MarkRead
+}
+
+' ============================================
+' Use Cases - Staff Functions
+' ============================================
+package "Staff Functions" #LightYellow {
+  usecase "View Staff Dashboard" as UC_StaffDashboard
+  
+  rectangle "Donor Management" {
+    usecase "Manage Donors" as UC_ManageDonors
+    usecase "Approve/Reject Donor" as UC_ApproveDonor
+    usecase "Check Donor Eligibility" as UC_CheckEligibility
+    usecase "View Medical Documents" as UC_ViewMedicalDocs
+    usecase "Verify Medical Documents" as UC_VerifyMedicalDocs
+  }
+  
+  rectangle "Patient Management" {
+    usecase "Manage Patients" as UC_ManagePatients
+    usecase "Add Patient" as UC_AddPatient
+    usecase "Update Patient" as UC_UpdatePatient
+    usecase "View Patient Requests" as UC_ViewPatientRequests
+  }
+  
+  rectangle "Donation Management" {
+    usecase "Manage Donations" as UC_ManageDonations
+    usecase "Record Donation" as UC_RecordDonation
+    usecase "Perform Lab Test" as UC_PerformLabTest
+    usecase "Update Test Result" as UC_UpdateTestResult
+    usecase "Upload Lab Report" as UC_UploadLabReport
+  }
+  
+  rectangle "Inventory Management" {
+    usecase "Manage Inventory" as UC_ManageInventory
+    usecase "View Inventory Summary" as UC_InventorySummary
+    usecase "Update Blood Quantity" as UC_UpdateQuantity
+    usecase "View Low Stock" as UC_ViewLowStock
+    usecase "View Expiring Units" as UC_ViewExpiring
+    usecase "Remove Expired Units" as UC_RemoveExpired
+  }
+  
+  rectangle "Request Management" {
+    usecase "Manage Blood Requests" as UC_ManageRequests
+    usecase "Create Blood Request" as UC_CreateRequest
+    usecase "Update Request Status" as UC_UpdateRequestStatus
+    usecase "Fulfill Request" as UC_FulfillRequest
+    usecase "Cancel Request" as UC_CancelRequest
+  }
+  
+  rectangle "Reports & Analytics" {
+    usecase "View Reports Dashboard" as UC_ReportsDashboard
+    usecase "Generate Donor Reports" as UC_DonorReports
+    usecase "Generate Donation Reports" as UC_DonationReports
+    usecase "Generate Inventory Reports" as UC_InventoryReports
+    usecase "Generate Request Reports" as UC_RequestReports
+    usecase "Print Reports" as UC_PrintReports
+  }
+}
+
+' ============================================
+' Use Cases - Admin Functions
+' ============================================
+package "Admin Functions" #LightCoral {
+  usecase "View Admin Dashboard" as UC_AdminDashboard
+  usecase "Manage Staff" as UC_ManageStaff
+  usecase "Manage Users" as UC_ManageUsers
+  usecase "Assign User Roles" as UC_AssignRoles
+  usecase "Activate/Deactivate User" as UC_ActivateUser
+  usecase "View System Statistics" as UC_SystemStats
+}
+
+' ============================================
+' Use Cases - System Functions
+' ============================================
+package "System Functions" #LightGray {
+  usecase "Send Notifications" as UC_SendNotifications
+  usecase "Auto Remove Expired Units" as UC_AutoRemoveExpired
+  usecase "Check Low Stock Alerts" as UC_CheckLowStock
+  usecase "Update Inventory Status" as UC_UpdateInventoryStatus
+}
+
+' ============================================
+' Guest Relationships
+' ============================================
+guest --> UC_Home
+guest --> UC_ViewRequests
+guest --> UC_ViewUrgent
+guest --> UC_About
+guest --> UC_Contact
+guest --> UC_Login
+guest --> UC_RegisterDonor
+guest --> UC_StaffLogin
+guest --> UC_StaffRegister
+
+' ============================================
+' Donor Relationships
+' ============================================
+donor --> UC_DonorDashboard
+donor --> UC_MyDonations
+donor --> UC_RespondRequest
+donor --> UC_MyResponses
+donor --> UC_UpdateResponse
+donor --> UC_CancelResponse
+donor --> UC_ViewProfile
+donor --> UC_UpdateProfile
+donor --> UC_ChangePassword
+donor --> UC_ViewNotifications
+donor --> UC_MarkRead
+
+' ============================================
+' Staff Relationships
+' ============================================
+staff --> UC_StaffDashboard
+staff --> UC_ManageDonors
+staff --> UC_ApproveDonor
+staff --> UC_CheckEligibility
+staff --> UC_ViewMedicalDocs
+staff --> UC_VerifyMedicalDocs
+staff --> UC_ManagePatients
+staff --> UC_AddPatient
+staff --> UC_UpdatePatient
+staff --> UC_ViewPatientRequests
+staff --> UC_ManageDonations
+staff --> UC_RecordDonation
+staff --> UC_PerformLabTest
+staff --> UC_UpdateTestResult
+staff --> UC_UploadLabReport
+staff --> UC_ManageInventory
+staff --> UC_InventorySummary
+staff --> UC_UpdateQuantity
+staff --> UC_ViewLowStock
+staff --> UC_ViewExpiring
+staff --> UC_RemoveExpired
+staff --> UC_ManageRequests
+staff --> UC_CreateRequest
+staff --> UC_UpdateRequestStatus
+staff --> UC_FulfillRequest
+staff --> UC_CancelRequest
+staff --> UC_ReportsDashboard
+staff --> UC_DonorReports
+staff --> UC_DonationReports
+staff --> UC_InventoryReports
+staff --> UC_RequestReports
+staff --> UC_PrintReports
+
+' ============================================
+' Admin Relationships
+' ============================================
+admin --> UC_AdminDashboard
+admin --> UC_ManageStaff
+admin --> UC_ManageUsers
+admin --> UC_AssignRoles
+admin --> UC_ActivateUser
+admin --> UC_SystemStats
+
+' ============================================
+' System Relationships
+' ============================================
+system --> UC_SendNotifications
+system --> UC_AutoRemoveExpired
+system --> UC_CheckLowStock
+system --> UC_UpdateInventoryStatus
+
+' ============================================
+' Include Relationships
+' ============================================
+UC_RecordDonation ..> UC_CheckEligibility : <<include>>
+UC_FulfillRequest ..> UC_UpdateInventoryStatus : <<include>>
+UC_PerformLabTest ..> UC_UpdateInventoryStatus : <<include>>
+UC_RespondRequest ..> UC_SendNotifications : <<include>>
+UC_CreateRequest ..> UC_SendNotifications : <<include>>
+UC_ApproveDonor ..> UC_SendNotifications : <<include>>
+
+' ============================================
+' Extend Relationships
+' ============================================
+UC_PrintReports ..> UC_DonorReports : <<extend>>
+UC_PrintReports ..> UC_DonationReports : <<extend>>
+UC_PrintReports ..> UC_InventoryReports : <<extend>>
+UC_PrintReports ..> UC_RequestReports : <<extend>>
+
+note right of system
+  System performs automated
+  tasks like sending notifications,
+  checking inventory levels,
+  and removing expired units
+end note
+
+note bottom of admin
+  Admin has all Staff permissions
+  plus additional administrative
+  functions
+end note
+
+@enduml

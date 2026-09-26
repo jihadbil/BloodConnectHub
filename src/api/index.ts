@@ -8,3 +8,8 @@ export { donationsApi } from './donations';
 export { inventoryApi } from './inventory';
 export { reportsApi } from './reports';
 export { donorResponsesApi } from './donorResponses';
+export { medicalDocumentsApi } from './medicalDocuments';
+export { usersApi } from './users';
+export { notificationsApi } from './notifications';
+export { donationLabReportsApi } from './donationLabReports';
+

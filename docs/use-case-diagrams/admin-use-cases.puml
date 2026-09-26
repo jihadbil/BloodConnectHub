@@ -1,0 +1,529 @@
+@startuml BloodConnectHub - Admin Use Case Diagram
+
+!define RECTANGLE class
+
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam backgroundColor #FEFEFE
+
+title BloodConnectHub - Admin Use Case Diagram
+
+' ============================================
+' Actors
+' ============================================
+:Admin: as admin
+actor "Reporting System" as reportingSystem
+actor "Notification System" as notificationSystem
+
+' ============================================
+' Use Cases - Authentication & Profile
+' ============================================
+package "Authentication & Profile" #FFEBEE {
+  usecase "Login as Admin" as UC_Login
+  usecase "Logout" as UC_Logout
+  usecase "View Admin Profile" as UC_ViewProfile
+  usecase "Update Profile" as UC_UpdateProfile
+  usecase "Change Password" as UC_ChangePassword
+}
+
+' ============================================
+' Use Cases - Dashboard & Overview
+' ============================================
+package "Admin Dashboard" #E8EAF6 {
+  usecase "View Admin Dashboard" as UC_AdminDashboard
+  usecase "View System Statistics" as UC_SystemStats
+  usecase "View Active Donors Count" as UC_ActiveDonors
+  usecase "View Donations This Month" as UC_DonationsMonth
+  usecase "View Pending Requests" as UC_PendingRequests
+  usecase "View Emergency Requests" as UC_EmergencyRequests
+  usecase "View Inventory Status" as UC_InventoryStatus
+  usecase "View Expiring Units Alert" as UC_ExpiringAlert
+  usecase "View Low Stock Alerts" as UC_LowStockAlert
+}
+
+' ============================================
+' Use Cases - User Management
+' ============================================
+package "User Management" #E1F5FE {
+  usecase "Manage Users" as UC_ManageUsers
+  usecase "View All Users" as UC_ViewUsers
+  usecase "Search Users" as UC_SearchUsers
+  usecase "Filter Users by Role" as UC_FilterByRole
+  usecase "Add New User" as UC_AddUser
+  usecase "Update User Information" as UC_UpdateUser
+  usecase "Delete User" as UC_DeleteUser
+  usecase "Activate User Account" as UC_ActivateUser
+  usecase "Deactivate User Account" as UC_DeactivateUser
+  usecase "Reset User Password" as UC_ResetPassword
+  usecase "View User Activity Log" as UC_UserActivityLog
+}
+
+' ============================================
+' Use Cases - Role Management
+' ============================================
+package "Role & Permission Management" #F3E5F5 {
+  usecase "Manage Roles" as UC_ManageRoles
+  usecase "View All Roles" as UC_ViewRoles
+  usecase "Assign Role to User" as UC_AssignRole
+  usecase "Remove Role from User" as UC_RemoveRole
+  usecase "Create Custom Role" as UC_CreateRole
+  usecase "Update Role Permissions" as UC_UpdateRolePermissions
+  usecase "Delete Role" as UC_DeleteRole
+  usecase "View Role Permissions" as UC_ViewPermissions
+}
+
+' ============================================
+' Use Cases - Staff Management
+' ============================================
+package "Staff Management" #E8F5E9 {
+  usecase "Manage Staff" as UC_ManageStaff
+  usecase "View All Staff" as UC_ViewStaff
+  usecase "Add New Staff Member" as UC_AddStaff
+  usecase "Update Staff Information" as UC_UpdateStaff
+  usecase "Remove Staff Member" as UC_RemoveStaff
+  usecase "Assign Staff Permissions" as UC_AssignStaffPermissions
+  usecase "View Staff Performance" as UC_StaffPerformance
+  usecase "View Staff Activity" as UC_StaffActivity
+}
+
+' ============================================
+' Use Cases - Donor Management (Admin Level)
+' ============================================
+package "Donor Management (Admin)" #FFF9C4 {
+  usecase "Manage All Donors" as UC_ManageDonors
+  usecase "View All Donors" as UC_ViewDonors
+  usecase "Approve Donor Registration" as UC_ApproveDonor
+  usecase "Reject Donor Registration" as UC_RejectDonor
+  usecase "Bulk Approve Donors" as UC_BulkApprove
+  usecase "View Pending Approvals" as UC_PendingApprovals
+  usecase "Verify Medical Documents" as UC_VerifyDocs
+  usecase "Link Donor to User Account" as UC_LinkDonor
+  usecase "Unlink Donor from User" as UC_UnlinkDonor
+  usecase "View Donor Statistics" as UC_DonorStats
+  usecase "Export Donor Data" as UC_ExportDonors
+}
+
+' ============================================
+' Use Cases - Patient Management (Admin Level)
+' ============================================
+package "Patient Management (Admin)" #FFCCBC {
+  usecase "Manage All Patients" as UC_ManagePatients
+  usecase "View All Patients" as UC_ViewPatients
+  usecase "Add Patient" as UC_AddPatient
+  usecase "Update Patient Information" as UC_UpdatePatient
+  usecase "Delete Patient" as UC_DeletePatient
+  usecase "View Patient History" as UC_PatientHistory
+  usecase "View Patient Requests" as UC_PatientRequests
+  usecase "Export Patient Data" as UC_ExportPatients
+}
+
+' ============================================
+' Use Cases - Donation Management (Admin Level)
+' ============================================
+package "Donation Management (Admin)" #C8E6C9 {
+  usecase "Manage All Donations" as UC_ManageDonations
+  usecase "View All Donations" as UC_ViewDonations
+  usecase "Record New Donation" as UC_RecordDonation
+  usecase "Update Donation Information" as UC_UpdateDonation
+  usecase "Delete Donation" as UC_DeleteDonation
+  usecase "Approve Lab Test Results" as UC_ApproveLabTest
+  usecase "Reject Lab Test Results" as UC_RejectLabTest
+  usecase "View Donation Statistics" as UC_DonationStats
+  usecase "Export Donation Data" as UC_ExportDonations
+}
+
+' ============================================
+' Use Cases - Inventory Management (Admin Level)
+' ============================================
+package "Inventory Management (Admin)" #B2DFDB {
+  usecase "Manage Inventory" as UC_ManageInventory
+  usecase "View Full Inventory" as UC_ViewInventory
+  usecase "Update Blood Quantities" as UC_UpdateQuantities
+  usecase "Set Low Stock Thresholds" as UC_SetThresholds
+  usecase "View Expiring Units" as UC_ViewExpiring
+  usecase "Remove Expired Units" as UC_RemoveExpired
+  usecase "Reserve Blood Units" as UC_ReserveUnits
+  usecase "Release Reserved Units" as UC_ReleaseUnits
+  usecase "Transfer Blood Units" as UC_TransferUnits
+  usecase "View Inventory History" as UC_InventoryHistory
+  usecase "Export Inventory Data" as UC_ExportInventory
+}
+
+' ============================================
+' Use Cases - Blood Request Management (Admin Level)
+' ============================================
+package "Blood Request Management (Admin)" #F8BBD0 {
+  usecase "Manage All Requests" as UC_ManageRequests
+  usecase "View All Blood Requests" as UC_ViewRequests
+  usecase "Create Blood Request" as UC_CreateRequest
+  usecase "Update Request Status" as UC_UpdateRequestStatus
+  usecase "Fulfill Request" as UC_FulfillRequest
+  usecase "Cancel Request" as UC_CancelRequest
+  usecase "Prioritize Urgent Requests" as UC_PrioritizeRequests
+  usecase "View Request History" as UC_RequestHistory
+  usecase "Export Request Data" as UC_ExportRequests
+}
+
+' ============================================
+' Use Cases - Reports & Analytics
+' ============================================
+package "Reports & Analytics" #E1BEE7 {
+  usecase "Access Reports Dashboard" as UC_ReportsDashboard
+  
+  rectangle "Donor Reports" {
+    usecase "Donors by Blood Type" as UC_DonorsByBloodType
+    usecase "Active vs Inactive Donors" as UC_ActiveVsInactive
+    usecase "Donors by City" as UC_DonorsByCity
+    usecase "Eligible Donors Report" as UC_EligibleDonors
+  }
+  
+  rectangle "Donation Reports" {
+    usecase "Donations by Period" as UC_DonationsByPeriod
+    usecase "Blood Quantity by Type" as UC_BloodQuantity
+    usecase "Test Results Statistics" as UC_TestResultsStats
+    usecase "Most Active Donors" as UC_MostActiveDonors
+  }
+  
+  rectangle "Inventory Reports" {
+    usecase "Inventory Availability" as UC_InventoryAvailability
+    usecase "Expiring Units Report" as UC_ExpiringUnitsReport
+    usecase "Expired Units Report" as UC_ExpiredUnitsReport
+    usecase "Consumption Rate Analysis" as UC_ConsumptionRate
+    usecase "Low Inventory Alerts" as UC_LowInventoryAlerts
+  }
+  
+  rectangle "Request Reports" {
+    usecase "Requests by Status" as UC_RequestsByStatus
+    usecase "Requests by Urgency" as UC_RequestsByUrgency
+    usecase "Fulfillment Rate Report" as UC_FulfillmentRate
+    usecase "Average Fulfillment Time" as UC_AvgFulfillmentTime
+  }
+  
+  usecase "Generate Custom Report" as UC_CustomReport
+  usecase "Schedule Automated Reports" as UC_ScheduleReports
+  usecase "Export Reports (PDF/Excel)" as UC_ExportReports
+  usecase "Print Reports" as UC_PrintReports
+  usecase "Email Reports" as UC_EmailReports
+}
+
+' ============================================
+' Use Cases - System Configuration
+' ============================================
+package "System Configuration" #CFD8DC {
+  usecase "Configure System Settings" as UC_SystemSettings
+  usecase "Set Blood Type Thresholds" as UC_BloodTypeThresholds
+  usecase "Configure Notification Rules" as UC_NotificationRules
+  usecase "Set Eligibility Rules" as UC_EligibilityRules
+  usecase "Configure Email Templates" as UC_EmailTemplates
+  usecase "Manage System Parameters" as UC_SystemParameters
+  usecase "Configure Backup Settings" as UC_BackupSettings
+  usecase "View System Logs" as UC_SystemLogs
+  usecase "Clear Cache" as UC_ClearCache
+}
+
+' ============================================
+' Use Cases - Notifications (Admin)
+' ============================================
+package "Notification Management" #FFF59D {
+  usecase "View All Notifications" as UC_ViewNotifications
+  usecase "Send Bulk Notifications" as UC_BulkNotifications
+  usecase "Create Announcement" as UC_CreateAnnouncement
+  usecase "Notify Eligible Donors" as UC_NotifyEligibleDonors
+  usecase "Send Emergency Alerts" as UC_EmergencyAlerts
+  usecase "View Notification History" as UC_NotificationHistory
+}
+
+' ============================================
+' Use Cases - Audit & Security
+' ============================================
+package "Audit & Security" #FFCCBC {
+  usecase "View Audit Logs" as UC_AuditLogs
+  usecase "Track User Actions" as UC_TrackActions
+  usecase "View Login History" as UC_LoginHistory
+  usecase "Monitor System Security" as UC_MonitorSecurity
+  usecase "Review Data Changes" as UC_ReviewChanges
+  usecase "Export Audit Reports" as UC_ExportAudit
+  usecase "Configure Security Policies" as UC_SecurityPolicies
+}
+
+' ============================================
+' Admin Relationships - Authentication
+' ============================================
+admin --> UC_Login
+admin --> UC_Logout
+admin --> UC_ViewProfile
+admin --> UC_UpdateProfile
+admin --> UC_ChangePassword
+
+' ============================================
+' Admin Relationships - Dashboard
+' ============================================
+admin --> UC_AdminDashboard
+admin --> UC_SystemStats
+admin --> UC_ActiveDonors
+admin --> UC_DonationsMonth
+admin --> UC_PendingRequests
+admin --> UC_EmergencyRequests
+admin --> UC_InventoryStatus
+admin --> UC_ExpiringAlert
+admin --> UC_LowStockAlert
+
+' ============================================
+' Admin Relationships - User Management
+' ============================================
+admin --> UC_ManageUsers
+admin --> UC_ViewUsers
+admin --> UC_SearchUsers
+admin --> UC_FilterByRole
+admin --> UC_AddUser
+admin --> UC_UpdateUser
+admin --> UC_DeleteUser
+admin --> UC_ActivateUser
+admin --> UC_DeactivateUser
+admin --> UC_ResetPassword
+admin --> UC_UserActivityLog
+
+' ============================================
+' Admin Relationships - Role Management
+' ============================================
+admin --> UC_ManageRoles
+admin --> UC_ViewRoles
+admin --> UC_AssignRole
+admin --> UC_RemoveRole
+admin --> UC_CreateRole
+admin --> UC_UpdateRolePermissions
+admin --> UC_DeleteRole
+admin --> UC_ViewPermissions
+
+' ============================================
+' Admin Relationships - Staff Management
+' ============================================
+admin --> UC_ManageStaff
+admin --> UC_ViewStaff
+admin --> UC_AddStaff
+admin --> UC_UpdateStaff
+admin --> UC_RemoveStaff
+admin --> UC_AssignStaffPermissions
+admin --> UC_StaffPerformance
+admin --> UC_StaffActivity
+
+' ============================================
+' Admin Relationships - Donor Management
+' ============================================
+admin --> UC_ManageDonors
+admin --> UC_ViewDonors
+admin --> UC_ApproveDonor
+admin --> UC_RejectDonor
+admin --> UC_BulkApprove
+admin --> UC_PendingApprovals
+admin --> UC_VerifyDocs
+admin --> UC_LinkDonor
+admin --> UC_UnlinkDonor
+admin --> UC_DonorStats
+admin --> UC_ExportDonors
+
+' ============================================
+' Admin Relationships - Patient Management
+' ============================================
+admin --> UC_ManagePatients
+admin --> UC_ViewPatients
+admin --> UC_AddPatient
+admin --> UC_UpdatePatient
+admin --> UC_DeletePatient
+admin --> UC_PatientHistory
+admin --> UC_PatientRequests
+admin --> UC_ExportPatients
+
+' ============================================
+' Admin Relationships - Donation Management
+' ============================================
+admin --> UC_ManageDonations
+admin --> UC_ViewDonations
+admin --> UC_RecordDonation
+admin --> UC_UpdateDonation
+admin --> UC_DeleteDonation
+admin --> UC_ApproveLabTest
+admin --> UC_RejectLabTest
+admin --> UC_DonationStats
+admin --> UC_ExportDonations
+
+' ============================================
+' Admin Relationships - Inventory Management
+' ============================================
+admin --> UC_ManageInventory
+admin --> UC_ViewInventory
+admin --> UC_UpdateQuantities
+admin --> UC_SetThresholds
+admin --> UC_ViewExpiring
+admin --> UC_RemoveExpired
+admin --> UC_ReserveUnits
+admin --> UC_ReleaseUnits
+admin --> UC_TransferUnits
+admin --> UC_InventoryHistory
+admin --> UC_ExportInventory
+
+' ============================================
+' Admin Relationships - Request Management
+' ============================================
+admin --> UC_ManageRequests
+admin --> UC_ViewRequests
+admin --> UC_CreateRequest
+admin --> UC_UpdateRequestStatus
+admin --> UC_FulfillRequest
+admin --> UC_CancelRequest
+admin --> UC_PrioritizeRequests
+admin --> UC_RequestHistory
+admin --> UC_ExportRequests
+
+' ============================================
+' Admin Relationships - Reports
+' ============================================
+admin --> UC_ReportsDashboard
+admin --> UC_DonorsByBloodType
+admin --> UC_ActiveVsInactive
+admin --> UC_DonorsByCity
+admin --> UC_EligibleDonors
+admin --> UC_DonationsByPeriod
+admin --> UC_BloodQuantity
+admin --> UC_TestResultsStats
+admin --> UC_MostActiveDonors
+admin --> UC_InventoryAvailability
+admin --> UC_ExpiringUnitsReport
+admin --> UC_ExpiredUnitsReport
+admin --> UC_ConsumptionRate
+admin --> UC_LowInventoryAlerts
+admin --> UC_RequestsByStatus
+admin --> UC_RequestsByUrgency
+admin --> UC_FulfillmentRate
+admin --> UC_AvgFulfillmentTime
+admin --> UC_CustomReport
+admin --> UC_ScheduleReports
+admin --> UC_ExportReports
+admin --> UC_PrintReports
+admin --> UC_EmailReports
+
+' ============================================
+' Admin Relationships - System Configuration
+' ============================================
+admin --> UC_SystemSettings
+admin --> UC_BloodTypeThresholds
+admin --> UC_NotificationRules
+admin --> UC_EligibilityRules
+admin --> UC_EmailTemplates
+admin --> UC_SystemParameters
+admin --> UC_BackupSettings
+admin --> UC_SystemLogs
+admin --> UC_ClearCache
+
+' ============================================
+' Admin Relationships - Notifications
+' ============================================
+admin --> UC_ViewNotifications
+admin --> UC_BulkNotifications
+admin --> UC_CreateAnnouncement
+admin --> UC_NotifyEligibleDonors
+admin --> UC_EmergencyAlerts
+admin --> UC_NotificationHistory
+
+' ============================================
+' Admin Relationships - Audit & Security
+' ============================================
+admin --> UC_AuditLogs
+admin --> UC_TrackActions
+admin --> UC_LoginHistory
+admin --> UC_MonitorSecurity
+admin --> UC_ReviewChanges
+admin --> UC_ExportAudit
+admin --> UC_SecurityPolicies
+
+' ============================================
+' System Relationships
+' ============================================
+reportingSystem --> UC_ScheduleReports
+reportingSystem --> UC_EmailReports
+notificationSystem --> UC_EmergencyAlerts
+notificationSystem --> UC_LowStockAlert
+
+' ============================================
+' Include Relationships
+' ============================================
+UC_AdminDashboard ..> UC_SystemStats : <<include>>
+UC_AdminDashboard ..> UC_InventoryStatus : <<include>>
+UC_AdminDashboard ..> UC_LowStockAlert : <<include>>
+
+UC_ManageUsers ..> UC_ViewUsers : <<include>>
+UC_ManageDonors ..> UC_ViewDonors : <<include>>
+UC_ManageStaff ..> UC_ViewStaff : <<include>>
+
+UC_ApproveDonor ..> UC_VerifyDocs : <<include>>
+UC_FulfillRequest ..> UC_UpdateQuantities : <<include>>
+UC_RecordDonation ..> UC_UpdateQuantities : <<include>>
+
+UC_BulkNotifications ..> notificationSystem : <<include>>
+UC_EmergencyAlerts ..> notificationSystem : <<include>>
+
+' ============================================
+' Extend Relationships
+' ============================================
+UC_ExportReports ..> UC_ReportsDashboard : <<extend>>
+UC_PrintReports ..> UC_ReportsDashboard : <<extend>>
+UC_EmailReports ..> UC_ReportsDashboard : <<extend>>
+
+UC_BulkApprove ..> UC_ApproveDonor : <<extend>>
+UC_ResetPassword ..> UC_UpdateUser : <<extend>>
+
+' ============================================
+' Notes
+' ============================================
+note right of UC_AdminDashboard
+  Admin Dashboard displays:
+  - Real-time system statistics
+  - Critical alerts
+  - Pending approvals
+  - Low stock warnings
+  - Emergency requests
+  - Recent activities
+end note
+
+note bottom of UC_ManageUsers
+  User Management includes:
+  - Create/Update/Delete users
+  - Assign/Remove roles
+  - Activate/Deactivate accounts
+  - Reset passwords
+  - View activity logs
+end note
+
+note left of UC_ReportsDashboard
+  Comprehensive reporting system:
+  - Donor analytics
+  - Donation trends
+  - Inventory insights
+  - Request fulfillment metrics
+  - Custom report builder
+  - Scheduled reports
+  - Multiple export formats
+end note
+
+note bottom of UC_SystemSettings
+  System Configuration:
+  - Blood type thresholds
+  - Notification rules
+  - Eligibility criteria
+  - Email templates
+  - Backup settings
+  - Security policies
+end note
+
+note right of UC_AuditLogs
+  Audit & Security features:
+  - Track all user actions
+  - Monitor login attempts
+  - Review data changes
+  - Export audit reports
+  - Configure security policies
+  - Compliance reporting
+end note
+
+@enduml

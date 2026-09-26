@@ -3,7 +3,7 @@
 
 import type { ServiceResponse } from '@/types/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7142/api';
 
 /**
  * Get stored authentication token
@@ -42,26 +42,34 @@ export class ApiClient {
         headers,
       });
 
-      const data = await response.json();
-
       // Handle 401 Unauthorized - clear auth and redirect to login
       if (response.status === 401) {
         localStorage.removeItem('api_user');
         localStorage.removeItem('api_token');
         // Don't redirect here, let the ProtectedRoute handle it
         return {
+          isSuccess: false,
           success: false,
           message: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً',
-          data: null,
+          data: null as any,
           errors: ['Unauthorized'],
         };
       }
 
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+      if (data && typeof data === 'object') {
+        const isSuccessVal = data.isSuccess !== undefined ? data.isSuccess : data.success;
+        data.success = isSuccessVal;
+        data.isSuccess = isSuccessVal;
+      }
+
       if (!response.ok) {
         return {
+          isSuccess: false,
           success: false,
           message: data.message || 'حدث خطأ غير متوقع',
-          data: null,
+          data: null as any,
           errors: data.errors || [data.message || 'خطأ في الاتصال بالخادم'],
         };
       }
@@ -70,9 +78,10 @@ export class ApiClient {
     } catch (error) {
       console.error('API Error:', error);
       return {
+        isSuccess: false,
         success: false,
         message: 'فشل الاتصال بالخادم',
-        data: null,
+        data: null as any,
         errors: [error instanceof Error ? error.message : 'خطأ غير معروف'],
       };
     }
@@ -105,6 +114,68 @@ export class ApiClient {
 
   async delete<T>(endpoint: string): Promise<ServiceResponse<T>> {
     return this.request<T>(endpoint, { method: 'DELETE' });
+  }
+
+  async postFormData<T>(endpoint: string, formData: FormData): Promise<ServiceResponse<T>> {
+    const url = `${this.baseURL}${endpoint}`;
+    const token = getAuthToken();
+
+    try {
+      const headers: Record<string, string> = {};
+
+      // Add Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      // Handle 401 Unauthorized - clear auth and redirect to login
+      if (response.status === 401) {
+        localStorage.removeItem('api_user');
+        localStorage.removeItem('api_token');
+        return {
+          isSuccess: false,
+          success: false,
+          message: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً',
+          data: null as any,
+          errors: ['Unauthorized'],
+        };
+      }
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+      if (data && typeof data === 'object') {
+        const isSuccessVal = data.isSuccess !== undefined ? data.isSuccess : data.success;
+        data.success = isSuccessVal;
+        data.isSuccess = isSuccessVal;
+      }
+
+      if (!response.ok) {
+        return {
+          isSuccess: false,
+          success: false,
+          message: data.message || 'حدث خطأ غير متوقع',
+          data: null as any,
+          errors: data.errors || [data.message || 'خطأ في الاتصال بالخادم'],
+        };
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API FormData Error:', error);
+      return {
+        isSuccess: false,
+        success: false,
+        message: 'فشل الاتصال بالخادم',
+        data: null as any,
+        errors: [error instanceof Error ? error.message : 'خطأ غير معروف'],
+      };
+    }
   }
 }
 

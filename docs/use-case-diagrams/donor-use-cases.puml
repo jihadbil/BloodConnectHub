@@ -1,0 +1,276 @@
+@startuml BloodConnectHub - Donor Use Case Diagram
+
+!define RECTANGLE class
+
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam backgroundColor #FEFEFE
+
+title BloodConnectHub - Donor Use Case Diagram
+
+' ============================================
+' Actors
+' ============================================
+:Donor: as donor
+actor "Notification System" as notificationSystem
+
+' ============================================
+' Use Cases - Authentication & Profile
+' ============================================
+package "Authentication & Profile Management" #E8F5E9 {
+  usecase "Register as Donor" as UC_Register
+  usecase "Login to System" as UC_Login
+  usecase "Logout" as UC_Logout
+  usecase "View Profile" as UC_ViewProfile
+  usecase "Update Profile Information" as UC_UpdateProfile
+  usecase "Change Password" as UC_ChangePassword
+  usecase "Upload Medical Documents" as UC_UploadDocs
+  usecase "View Approval Status" as UC_ViewApprovalStatus
+}
+
+' ============================================
+' Use Cases - Dashboard & Overview
+' ============================================
+package "Dashboard & Overview" #E3F2FD {
+  usecase "View Donor Dashboard" as UC_Dashboard
+  usecase "View Statistics" as UC_ViewStats
+  usecase "View Donation History" as UC_DonationHistory
+  usecase "View Next Eligible Date" as UC_NextEligibleDate
+  usecase "View Blood Type Info" as UC_BloodTypeInfo
+  usecase "View Total Donations Count" as UC_TotalDonations
+}
+
+' ============================================
+' Use Cases - Blood Requests
+' ============================================
+package "Blood Request Management" #FFF3E0 {
+  usecase "Browse Blood Requests" as UC_BrowseRequests
+  usecase "View Request Details" as UC_ViewRequestDetails
+  usecase "Filter Requests by Blood Type" as UC_FilterByBloodType
+  usecase "Filter Requests by Urgency" as UC_FilterByUrgency
+  usecase "View Urgent Requests" as UC_ViewUrgentRequests
+  usecase "View Emergency Requests" as UC_ViewEmergencyRequests
+  usecase "Search Requests" as UC_SearchRequests
+}
+
+' ============================================
+' Use Cases - Donor Responses
+' ============================================
+package "Response Management" #FCE4EC {
+  usecase "Respond to Blood Request" as UC_RespondToRequest
+  usecase "Submit Response" as UC_SubmitResponse
+  usecase "Add Response Notes" as UC_AddNotes
+  usecase "View My Responses" as UC_ViewMyResponses
+  usecase "View Response Status" as UC_ViewResponseStatus
+  usecase "Update Response" as UC_UpdateResponse
+  usecase "Cancel My Response" as UC_CancelResponse
+  usecase "Provide Cancellation Reason" as UC_CancellationReason
+  usecase "Confirm Donation Appointment" as UC_ConfirmAppointment
+}
+
+' ============================================
+' Use Cases - Donations
+' ============================================
+package "Donation Tracking" #F3E5F5 {
+  usecase "View My Donations" as UC_ViewDonations
+  usecase "View Donation Details" as UC_ViewDonationDetails
+  usecase "View Test Results" as UC_ViewTestResults
+  usecase "View Lab Reports" as UC_ViewLabReports
+  usecase "Download Lab Report" as UC_DownloadReport
+  usecase "View Donation Date" as UC_ViewDonationDate
+  usecase "View Quantity Donated" as UC_ViewQuantity
+}
+
+' ============================================
+' Use Cases - Notifications
+' ============================================
+package "Notification Management" #E0F2F1 {
+  usecase "View Notifications" as UC_ViewNotifications
+  usecase "View Unread Count" as UC_UnreadCount
+  usecase "Mark as Read" as UC_MarkAsRead
+  usecase "Mark All as Read" as UC_MarkAllRead
+  usecase "Delete Notification" as UC_DeleteNotification
+  usecase "Receive New Request Alert" as UC_ReceiveAlert
+  usecase "Receive Response Update" as UC_ReceiveResponseUpdate
+  usecase "Receive Approval Notification" as UC_ReceiveApproval
+}
+
+' ============================================
+' Use Cases - Help & Information
+' ============================================
+package "Information & Support" #EFEBE9 {
+  usecase "View Blood Types Information" as UC_BloodTypesInfo
+  usecase "View Donation Guidelines" as UC_Guidelines
+  usecase "View Eligibility Criteria" as UC_EligibilityCriteria
+  usecase "View FAQ" as UC_FAQ
+  usecase "Contact Support" as UC_ContactSupport
+  usecase "View About Page" as UC_AboutPage
+}
+
+' ============================================
+' Donor Relationships - Authentication
+' ============================================
+donor --> UC_Register
+donor --> UC_Login
+donor --> UC_Logout
+donor --> UC_ViewProfile
+donor --> UC_UpdateProfile
+donor --> UC_ChangePassword
+donor --> UC_UploadDocs
+donor --> UC_ViewApprovalStatus
+
+' ============================================
+' Donor Relationships - Dashboard
+' ============================================
+donor --> UC_Dashboard
+donor --> UC_ViewStats
+donor --> UC_DonationHistory
+donor --> UC_NextEligibleDate
+donor --> UC_BloodTypeInfo
+donor --> UC_TotalDonations
+
+' ============================================
+' Donor Relationships - Blood Requests
+' ============================================
+donor --> UC_BrowseRequests
+donor --> UC_ViewRequestDetails
+donor --> UC_FilterByBloodType
+donor --> UC_FilterByUrgency
+donor --> UC_ViewUrgentRequests
+donor --> UC_ViewEmergencyRequests
+donor --> UC_SearchRequests
+
+' ============================================
+' Donor Relationships - Responses
+' ============================================
+donor --> UC_RespondToRequest
+donor --> UC_SubmitResponse
+donor --> UC_AddNotes
+donor --> UC_ViewMyResponses
+donor --> UC_ViewResponseStatus
+donor --> UC_UpdateResponse
+donor --> UC_CancelResponse
+donor --> UC_CancellationReason
+donor --> UC_ConfirmAppointment
+
+' ============================================
+' Donor Relationships - Donations
+' ============================================
+donor --> UC_ViewDonations
+donor --> UC_ViewDonationDetails
+donor --> UC_ViewTestResults
+donor --> UC_ViewLabReports
+donor --> UC_DownloadReport
+donor --> UC_ViewDonationDate
+donor --> UC_ViewQuantity
+
+' ============================================
+' Donor Relationships - Notifications
+' ============================================
+donor --> UC_ViewNotifications
+donor --> UC_UnreadCount
+donor --> UC_MarkAsRead
+donor --> UC_MarkAllRead
+donor --> UC_DeleteNotification
+donor --> UC_ReceiveAlert
+donor --> UC_ReceiveResponseUpdate
+donor --> UC_ReceiveApproval
+
+' ============================================
+' Donor Relationships - Information
+' ============================================
+donor --> UC_BloodTypesInfo
+donor --> UC_Guidelines
+donor --> UC_EligibilityCriteria
+donor --> UC_FAQ
+donor --> UC_ContactSupport
+donor --> UC_AboutPage
+
+' ============================================
+' System Relationships
+' ============================================
+notificationSystem --> UC_ReceiveAlert
+notificationSystem --> UC_ReceiveResponseUpdate
+notificationSystem --> UC_ReceiveApproval
+
+' ============================================
+' Include Relationships
+' ============================================
+UC_Dashboard ..> UC_ViewStats : <<include>>
+UC_Dashboard ..> UC_DonationHistory : <<include>>
+UC_Dashboard ..> UC_NextEligibleDate : <<include>>
+
+UC_RespondToRequest ..> UC_ViewRequestDetails : <<include>>
+UC_SubmitResponse ..> UC_ReceiveAlert : <<include>>
+
+UC_ViewDonations ..> UC_ViewDonationDetails : <<include>>
+UC_ViewDonationDetails ..> UC_ViewTestResults : <<include>>
+
+UC_CancelResponse ..> UC_CancellationReason : <<include>>
+
+UC_Register ..> UC_UploadDocs : <<include>>
+
+' ============================================
+' Extend Relationships
+' ============================================
+UC_AddNotes ..> UC_SubmitResponse : <<extend>>
+UC_DownloadReport ..> UC_ViewLabReports : <<extend>>
+UC_ConfirmAppointment ..> UC_ViewResponseStatus : <<extend>>
+
+' ============================================
+' Notes
+' ============================================
+note right of UC_Register
+  Donor must provide:
+  - Personal information
+  - National ID
+  - Blood type
+  - Medical documents
+  - Contact details
+end note
+
+note right of UC_RespondToRequest
+  Donor can only respond if:
+  - Account is approved
+  - Blood type matches
+  - Eligible to donate
+  - Not already responded
+end note
+
+note right of UC_ViewApprovalStatus
+  Approval Status:
+  - Pending: Awaiting review
+  - Approved: Can donate
+  - Rejected: Cannot donate
+end note
+
+note bottom of UC_Dashboard
+  Dashboard shows:
+  - Total donations
+  - Last donation date
+  - Next eligible date
+  - Pending responses
+  - Recent notifications
+  - Urgent requests
+end note
+
+note left of notificationSystem
+  System sends notifications for:
+  - New blood requests
+  - Response status updates
+  - Approval/rejection
+  - Upcoming appointments
+  - Test results available
+end note
+
+note bottom of UC_ViewResponseStatus
+  Response Status Flow:
+  Pending → Contacted → 
+  Confirmed → Completed
+  
+  Or: Pending → Rejected
+  Or: Any → Cancelled
+end note
+
+@enduml

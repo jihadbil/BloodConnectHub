@@ -4,10 +4,11 @@
 export type Gender = 'Male' | 'Female';
 export type UrgencyLevel = 'Normal' | 'Urgent' | 'Emergency';
 export type RequestStatus = 'Pending' | 'Fulfilled' | 'PartiallyFulfilled' | 'Cancelled';
-export type TestResult = 'Pending' | 'Approved' | 'Rejected';
+export type TestResult = 'Pending' | 'Accepted' | 'Rejected';
 
 // API Response types
 export interface ServiceResponse<T> {
+  isSuccess: boolean;
   success: boolean;
   message?: string;
   data: T | null;
@@ -34,17 +35,23 @@ export interface BloodType {
 
 // User types
 export interface ApiUser {
-  userID: number;  // API returns userID (capital I and D)
-  userId?: number; // Alias for compatibility
-  username: string;
+  id: string;
+  userName: string;
+  email: string;
   fullName: string;
-  phone: string;
+  phoneNumber?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt?: string;
-  roles?: string[];
+  roles: string[];
   donorID?: number | null;
   donorName?: string | null;
+}
+
+export interface LoginResponse {
+  token: string;
+  expiresAt: string;
+  user: ApiUser;
 }
 
 export interface UserRole {
@@ -55,6 +62,14 @@ export interface UserRole {
 
 export interface UserWithRoles extends ApiUser {
   userRoles: UserRole[];
+}
+
+export enum DonorApprovalStatus {
+  PendingDocuments = 1,
+  PendingApproval = 2,
+  Approved = 3,
+  Rejected = 4,
+  RequestMoreDocs = 5
 }
 
 // Donor types
@@ -74,9 +89,13 @@ export interface Donor {
   city: string;
   lastDonationDate?: string | null;
   isActive: boolean;
+  approvalStatus: DonorApprovalStatus;
+  rejectionReason?: string | null;
+  approvalDate?: string | null;
+  userEmail?: string | null;
   createdAt: string;
   updatedAt?: string | null;
-  userID?: number | null;  // API returns userID
+  userId?: string | null;
   username?: string | null; // API returns username
 }
 
@@ -120,6 +139,8 @@ export interface BloodRequest {
   bloodTypeID?: number; // API returns PascalCase
   bloodType?: BloodType;
   quantityNeeded: number;
+  quantityFulfilled?: number;
+  quantityRemaining?: number;
   urgencyLevel: UrgencyLevel;
   requestDate: string;
   requiredDate: string;
@@ -144,6 +165,16 @@ export interface RequestFulfillment {
 }
 
 // Donation types
+export interface DonationLabReportDto {
+  labReportID: number;
+  donationID: number;
+  reportType: string;
+  filePath: string;
+  uploadedByUserId: string;
+  uploadedAt: string;
+  notes?: string | null;
+}
+
 export interface Donation {
   donationId: number;
   donorId: number;
@@ -153,9 +184,21 @@ export interface Donation {
   donationDate: string;
   quantity: number;
   testResult: TestResult;
+  testedAt?: string | null;
+  testedByUserId?: string | null;
+  testNotes?: string | null;
+  isAddedToInventory: boolean;
   notes?: string;
+  labReports?: DonationLabReportDto[];
   createdAt: string;
   updatedAt?: string;
+}
+
+export enum BloodUnitStatus {
+  Available = 0,
+  Reserved = 1,
+  Used = 2,
+  Expired = 3
 }
 
 // Inventory types
@@ -165,8 +208,20 @@ export interface BloodInventory {
   bloodType?: BloodType;
   quantityAvailable: number;
   quantityReserved: number;
+  itemsCount: number;
   createdAt: string;
   lastUpdated: string;
+}
+
+export interface BloodInventoryItem {
+  itemId: number;
+  bloodTypeId: number;
+  bloodTypeName: string;
+  donationId: number;
+  status: BloodUnitStatus;
+  expiryDate: string;
+  isExpired: boolean;
+  createdAt: string;
 }
 
 export interface InventorySummary {
@@ -179,16 +234,16 @@ export interface InventorySummary {
 
 // Request payload types
 export interface LoginRequest {
-  username: string;
+  userName: string;
   password: string;
 }
 
 export interface RegisterRequest {
-  username: string;
+  userName: string;
+  email: string;
   password: string;
   fullName: string;
-  phone: string;
-  roleId: number;
+  phoneNumber?: string;
 }
 
 export interface RegisterDonorRequest {
@@ -201,7 +256,7 @@ export interface RegisterDonorRequest {
   
   // Donor fields
   nationalID: string;
-  gender: number; // 0=Male, 1=Female
+  gender: number; // 1=Male, 2=Female
   dateOfBirth: string;
   bloodTypeID: number;
   city?: string | null;
@@ -233,7 +288,6 @@ export interface RegisterDonorResponse {
 }
 
 export interface ChangePasswordRequest {
-  userId: number;
   currentPassword: string;
   newPassword: string;
 }
@@ -241,13 +295,14 @@ export interface ChangePasswordRequest {
 export interface CreateDonorRequest {
   fullName: string;
   nationalID: string;
-  gender: number; // 0=Male, 1=Female
+  gender: number; // 1=Male, 2=Female
   dateOfBirth: string;
   phone: string;
   bloodTypeID: number;
   city: string;
   isActive?: boolean;
-  userID?: number | null;
+  approvalStatus?: DonorApprovalStatus;
+  userId?: string | null;
 }
 
 export interface UpdateDonorRequest {
@@ -261,7 +316,7 @@ export interface UpdateDonorRequest {
 export interface CreatePatientRequest {
   fullName: string;
   nationalID: string;
-  gender: number; // 0=Male, 1=Female
+  gender: number; // 1=Male, 2=Female
   dateOfBirth: string;
   phone: string;
   bloodTypeID: number;
@@ -289,7 +344,6 @@ export interface CreateDonationRequest {
   bloodTypeID: number;
   donationDate: string;
   quantity: number;
-  testResult: number; // 0=Pending, 1=Approved, 2=Rejected
   notes?: string;
 }
 
@@ -300,7 +354,57 @@ export interface UpdateTestResultRequest {
 
 export interface FulfillRequestPayload {
   donationId: number;
-  quantity: number;
+  quantityToFulfill: number;
+}
+
+export interface ApproveDonorDto {
+  newStatus: DonorApprovalStatus;
+  rejectionReason?: string | null;
+}
+
+export interface LabTestDonationDto {
+  testResult: TestResult;
+  testNotes?: string | null;
+  addToInventoryIfAccepted: boolean;
+}
+
+export interface UpdateQuantityDto {
+  quantityChange: number;
+}
+
+export interface MedicalDocument {
+  // API يُرجع PascalCase
+  documentID?: number;
+  donorID?: number;
+  // camelCase aliases للتوافق
+  documentId?: number;
+  donorId?: number;
+  documentType: string;
+  fileName?: string;
+  contentType?: string;
+  fileSize?: number;
+  filePath: string;
+  uploadedAt: string;
+  isVerified: boolean;
+  verifiedAt?: string | null;
+  verifiedByUserId?: string | null;
+  notes?: string | null;
+}
+
+export interface VerifyMedicalDocumentDto {
+  isVerified: boolean;
+  notes?: string;
+}
+
+export interface AssignRoleDto {
+  userId: string;
+  roleName: string;
+}
+
+export interface UpdateApplicationUserDto {
+  fullName?: string;
+  phoneNumber?: string;
+  email?: string;
 }
 
 // Blood Type IDs mapping - التفسير الصحيح من API
