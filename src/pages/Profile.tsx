@@ -18,16 +18,21 @@ import {
     ArrowRight,
     Shield,
     CheckCircle,
-    AlertCircle
+    AlertCircle,
+    Eye,
+    EyeOff
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useChangePassword } from "@/hooks/useApiAuth";
+import { useDonorByUserId } from "@/hooks/useDonors";
 import type { ApiUser } from "@/types/api";
 
 const Profile = () => {
     const { user, userRole, signOut } = useAuth();
     const apiUser = user as ApiUser | null;
     const changePassword = useChangePassword();
+    const { data: donorData } = useDonorByUserId(apiUser?.id || "");
+    const currentDonor = donorData?.data;
 
     const [passwordForm, setPasswordForm] = useState({
         currentPassword: "",
@@ -36,6 +41,9 @@ const Profile = () => {
     });
     const [passwordError, setPasswordError] = useState<string | null>(null);
     const [passwordSuccess, setPasswordSuccess] = useState(false);
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const handlePasswordChange = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -47,14 +55,18 @@ const Profile = () => {
             return;
         }
 
-        if (passwordForm.newPassword.length < 6) {
-            setPasswordError("كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل");
+        if (passwordForm.newPassword.length < 4) {
+            setPasswordError("كلمة المرور الجديدة يجب أن تكون 4 خانات على الأقل");
+            return;
+        }
+
+        if (!/^\d+$/.test(passwordForm.newPassword)) {
+            setPasswordError("كلمة المرور الجديدة يجب أن تحتوي على أرقام فقط");
             return;
         }
 
         changePassword.mutate(
             {
-                userId: apiUser?.userId || 0,
                 currentPassword: passwordForm.currentPassword,
                 newPassword: passwordForm.newPassword,
             },
@@ -85,6 +97,23 @@ const Profile = () => {
             case "staff": return "default";
             case "donor": return "secondary";
             default: return "outline";
+        }
+    };
+
+    const getApprovalStatusBadge = (status?: number) => {
+        switch (status) {
+            case 1:
+                return <Badge variant="outline" className="border-gray-400 text-gray-500 bg-gray-50">في انتظار رفع المستندات</Badge>;
+            case 2:
+                return <Badge variant="outline" className="border-yellow-500 text-yellow-600 bg-yellow-50">في انتظار الموافقة</Badge>;
+            case 3:
+                return <Badge variant="outline" className="border-green-500 text-green-700 bg-green-50">مقبول</Badge>;
+            case 4:
+                return <Badge variant="outline" className="border-red-500 text-red-700 bg-red-50">مرفوض</Badge>;
+            case 5:
+                return <Badge variant="outline" className="border-orange-400 text-orange-600 bg-orange-50">مطلوب وثائق إضافية</Badge>;
+            default:
+                return <Badge variant="outline" className="border-gray-300 text-gray-400 bg-white">غير معروف</Badge>;
         }
     };
 
@@ -120,15 +149,28 @@ const Profile = () => {
                                     <div>
                                         <h3 className="text-xl font-bold">{apiUser?.fullName || "المستخدم"}</h3>
                                         <div className="flex items-center gap-2">
-                                            <Badge variant={getRoleColor() as "default" | "secondary" | "destructive" | "outline"}>
-                                                <Shield className="h-3 w-3 ml-1" />
-                                                {getRoleName()}
-                                            </Badge>
-                                            {apiUser?.isActive && (
-                                                <Badge variant="outline" className="text-success border-success">
-                                                    <CheckCircle className="h-3 w-3 ml-1" />
-                                                    نشط
+                                            {apiUser?.roles && apiUser.roles.length > 0 ? (
+                                                apiUser.roles.map((role) => (
+                                                    <Badge key={role} variant={getRoleColor() as "default" | "secondary" | "destructive" | "outline"}>
+                                                        <Shield className="h-3 w-3 ml-1" />
+                                                        {role === 'Admin' ? 'مدير النظام' : role === 'BloodBankStaff' ? 'موظف بنك الدم' : role === 'Donor' ? 'متبرع' : role}
+                                                    </Badge>
+                                                ))
+                                            ) : (
+                                                <Badge variant={getRoleColor() as "default" | "secondary" | "destructive" | "outline"}>
+                                                    <Shield className="h-3 w-3 ml-1" />
+                                                    {getRoleName()}
                                                 </Badge>
+                                            )}
+                                            {userRole === 'donor' && currentDonor ? (
+                                                getApprovalStatusBadge(currentDonor.approvalStatus)
+                                            ) : (
+                                                apiUser?.isActive && (
+                                                    <Badge variant="outline" className="text-success border-success">
+                                                        <CheckCircle className="h-3 w-3 ml-1" />
+                                                        نشط
+                                                    </Badge>
+                                                )
                                             )}
                                         </div>
                                     </div>
@@ -139,15 +181,25 @@ const Profile = () => {
                                         <Label className="text-muted-foreground">اسم المستخدم</Label>
                                         <div className="flex items-center gap-2 p-3 bg-secondary/50 rounded-lg">
                                             <User className="h-4 w-4 text-muted-foreground" />
-                                            <span>{apiUser?.username || "-"}</span>
+                                            <span>{apiUser?.userName || "-"}</span>
                                         </div>
                                     </div>
 
                                     <div className="space-y-2">
+                                        <Label className="text-muted-foreground">البريد الإلكتروني</Label>
+                                        <div className="flex items-center gap-2 p-3 bg-secondary/50 rounded-lg">
+                                            <Mail className="h-4 w-4 text-muted-foreground" />
+                                            <span>{apiUser?.email || "-"}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
                                         <Label className="text-muted-foreground">رقم الهاتف</Label>
                                         <div className="flex items-center gap-2 p-3 bg-secondary/50 rounded-lg">
                                             <Phone className="h-4 w-4 text-muted-foreground" />
-                                            <span dir="ltr">{apiUser?.phone || "-"}</span>
+                                            <span dir="ltr">{apiUser?.phoneNumber || "-"}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -169,8 +221,8 @@ const Profile = () => {
 
                                     <div className="space-y-2">
                                         <Label className="text-muted-foreground">رقم المستخدم</Label>
-                                        <div className="p-3 bg-secondary/50 rounded-lg text-sm">
-                                            #{apiUser?.userId || "-"}
+                                        <div className="p-3 bg-secondary/50 rounded-lg text-sm truncate" title={apiUser?.id}>
+                                            #{apiUser?.id || "-"}
                                         </div>
                                     </div>
                                 </div>
@@ -208,13 +260,24 @@ const Profile = () => {
                                             <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                             <Input
                                                 id="currentPassword"
-                                                type="password"
+                                                type={showCurrentPassword ? "text" : "password"}
                                                 placeholder="أدخل كلمة المرور الحالية"
-                                                className="pr-10"
+                                                className="pr-10 pl-10"
                                                 value={passwordForm.currentPassword}
                                                 onChange={(e) => setPasswordForm(prev => ({ ...prev, currentPassword: e.target.value }))}
                                                 required
                                             />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                                            >
+                                                {showCurrentPassword ? (
+                                                    <EyeOff className="h-4 w-4" />
+                                                ) : (
+                                                    <Eye className="h-4 w-4" />
+                                                )}
+                                            </button>
                                         </div>
                                     </div>
 
@@ -225,13 +288,24 @@ const Profile = () => {
                                                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                                 <Input
                                                     id="newPassword"
-                                                    type="password"
+                                                    type={showNewPassword ? "text" : "password"}
                                                     placeholder="أدخل كلمة المرور الجديدة"
-                                                    className="pr-10"
+                                                    className="pr-10 pl-10"
                                                     value={passwordForm.newPassword}
                                                     onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
                                                     required
                                                 />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowNewPassword(!showNewPassword)}
+                                                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                                                >
+                                                    {showNewPassword ? (
+                                                        <EyeOff className="h-4 w-4" />
+                                                    ) : (
+                                                        <Eye className="h-4 w-4" />
+                                                    )}
+                                                </button>
                                             </div>
                                         </div>
 
@@ -241,13 +315,24 @@ const Profile = () => {
                                                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                                 <Input
                                                     id="confirmPassword"
-                                                    type="password"
+                                                    type={showConfirmPassword ? "text" : "password"}
                                                     placeholder="أعد إدخال كلمة المرور"
-                                                    className="pr-10"
+                                                    className="pr-10 pl-10"
                                                     value={passwordForm.confirmPassword}
                                                     onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
                                                     required
                                                 />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                                                >
+                                                    {showConfirmPassword ? (
+                                                        <EyeOff className="h-4 w-4" />
+                                                    ) : (
+                                                        <Eye className="h-4 w-4" />
+                                                    )}
+                                                </button>
                                             </div>
                                         </div>
                                     </div>

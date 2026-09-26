@@ -18,7 +18,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
 
   // Auth functions
-  signUp: (email: string, password: string, fullName: string, phone?: string) => Promise<{ error: Error | null; data?: ApiUser }>;
+  signUp: (username: string, email: string, password: string, fullName: string, phone?: string) => Promise<{ error: Error | null; data?: ApiUser }>;
   signIn: (username: string, password: string) => Promise<{ error: Error | null; data?: ApiUser }>;
   signOut: () => Promise<void>;
 
@@ -73,25 +73,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const stored = localStorage.getItem('api_user');
       if (stored) {
         try {
-          const userData = JSON.parse(stored) as ApiUser & { roleId?: number; roleName?: string; userRoles?: Array<{ roleName: string }> };
+          const userData = JSON.parse(stored) as ApiUser;
           setApiUser(userData);
 
-          // Determine role from user data - using new API response format
-          if (userData.roleId !== undefined) {
-            // Use roleId directly from API response
-            if (userData.roleId === 1) {
+          // Determine role from user data - using new API response format with roles array
+          if (userData.roles && userData.roles.length > 0) {
+            if (userData.roles.includes('Admin')) {
               setUserRole('admin');
-            } else if (userData.roleId === 2) {
-              setUserRole('staff');
-            } else {
-              setUserRole('donor');
-            }
-          } else if (userData.userRoles && userData.userRoles.length > 0) {
-            // Fallback to userRoles array if roleId not present
-            const roleName = userData.userRoles[0].roleName.toLowerCase();
-            if (roleName.includes('admin')) {
-              setUserRole('admin');
-            } else if (roleName.includes('staff') || roleName.includes('blood')) {
+            } else if (
+              userData.roles.includes('BloodBankStaff') ||
+              userData.roles.includes('Doctor') ||
+              userData.roles.includes('Nurse')
+            ) {
               setUserRole('staff');
             } else {
               setUserRole('donor');
@@ -150,26 +143,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // Sign Up function
-  const signUp = async (email: string, password: string, fullName: string, phone?: string) => {
+  const signUp = async (username: string, email: string, password: string, fullName: string, phone?: string) => {
     if (AUTH_MODE === "api" || AUTH_MODE === "auto") {
       try {
         const response = await authApi.register({
-          username: email,
+          userName: username,
+          email: email,
           password,
           fullName,
-          phone: phone || "",
-          roleId: 3, // Donor role (usually: 1=Admin, 2=Staff, 3=Donor)
+          phoneNumber: phone || "",
         });
 
-        if (response.success && response.data) {
-          const userData = response.data as ApiUser & { userRoles?: Array<{ roleName: string }> };
+        if (response.isSuccess && response.data) {
+          const userData = response.data;
           localStorage.setItem('api_user', JSON.stringify(userData));
           setApiUser(userData);
           setUserRole('donor');
           return { error: null, data: userData };
         } else {
           // Return the actual error message from the API
-          return { error: new Error(response.message || response.errors?.join(', ') || "فشل التسجيل") };
+          const errMsg = response.errors && response.errors.length > 0
+            ? response.errors.join(', ')
+            : (response.message || "فشل التسجيل");
+          return { error: new Error(errMsg) };
         }
       } catch (err) {
         // If API fails and mode is auto, try Supabase
@@ -204,29 +200,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signIn = async (username: string, password: string) => {
     if (AUTH_MODE === "api" || AUTH_MODE === "auto") {
       try {
-        const response = await authApi.login({ username, password });
+        const response = await authApi.login({ userName: username, password });
 
-        if (response.success && response.data) {
-          const userData = response.data as ApiUser & { roleId?: number; roleName?: string; userRoles?: Array<{ roleName: string }> };
-          localStorage.setItem('api_user', JSON.stringify(userData));
+        if (response.isSuccess && response.data) {
+          const userData = response.data;
+          // Note: authApi.login already sets api_user and api_token in localStorage
           setApiUser(userData);
 
-          // Determine role - using new API response format with roleId
-          if (userData.roleId !== undefined) {
-            // Use roleId directly from API response
-            if (userData.roleId === 1) {
+          // Determine role - using roles array
+          if (userData.roles && userData.roles.length > 0) {
+            if (userData.roles.includes('Admin')) {
               setUserRole('admin');
-            } else if (userData.roleId === 2) {
-              setUserRole('staff');
-            } else {
-              setUserRole('donor');
-            }
-          } else if (userData.userRoles && userData.userRoles.length > 0) {
-            // Fallback to userRoles array
-            const roleName = userData.userRoles[0].roleName.toLowerCase();
-            if (roleName.includes('admin')) {
-              setUserRole('admin');
-            } else if (roleName.includes('staff') || roleName.includes('blood')) {
+            } else if (
+              userData.roles.includes('BloodBankStaff') ||
+              userData.roles.includes('Doctor') ||
+              userData.roles.includes('Nurse')
+            ) {
               setUserRole('staff');
             } else {
               setUserRole('donor');

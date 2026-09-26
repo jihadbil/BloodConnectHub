@@ -25,7 +25,7 @@ export function useLogin() {
     return useMutation({
         mutationFn: (credentials: LoginRequest) => authApi.login(credentials),
         onSuccess: (response) => {
-            if (response.success && response.data) {
+            if (response.isSuccess && response.data) {
                 // Store user data in localStorage
                 localStorage.setItem('api_user', JSON.stringify(response.data));
 
@@ -67,7 +67,7 @@ export function useRegister() {
     return useMutation({
         mutationFn: (data: RegisterRequest) => authApi.register(data),
         onSuccess: (response) => {
-            if (response.success && response.data) {
+            if (response.isSuccess && response.data) {
                 // Store user data
                 localStorage.setItem('api_user', JSON.stringify(response.data));
 
@@ -107,7 +107,7 @@ export function useChangePassword() {
     return useMutation({
         mutationFn: (data: ChangePasswordRequest) => authApi.changePassword(data),
         onSuccess: (response) => {
-            if (response.success) {
+            if (response.isSuccess) {
                 toast({
                     title: 'تم بنجاح',
                     description: 'تم تغيير كلمة المرور',

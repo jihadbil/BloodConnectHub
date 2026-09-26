@@ -15,9 +15,9 @@ export function mapUrgencyLevel(level: string | number | undefined | null): 'cri
   // دعم القيم الرقمية
   if (typeof level === 'number') {
     const numericMap: Record<number, 'critical' | 'urgent' | 'normal'> = {
-      0: 'normal',
-      1: 'urgent',
-      2: 'critical',
+      1: 'normal',
+      2: 'urgent',
+      3: 'critical',
     };
     return numericMap[level] ?? 'normal';
   }
@@ -25,10 +25,12 @@ export function mapUrgencyLevel(level: string | number | undefined | null): 'cri
   // دعم النصوص بأي حالة للأحرف
   const normalized = String(level).toLowerCase().trim();
   const map: Record<string, 'critical' | 'urgent' | 'normal'> = {
+    '1': 'normal',
+    '2': 'urgent',
+    '3': 'critical',
     'emergency': 'critical',
     'urgent': 'urgent',
     'normal': 'normal',
-    // قيم محتملة أخرى
     'critical': 'critical',
     'high': 'urgent',
     'low': 'normal',
@@ -86,9 +88,9 @@ export function formatDateTime(date: string): string {
 export function mapTestResult(result: string | number | undefined | null): { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } {
   // تحويل الأرقام إلى نصوص
   const numericMap: Record<number, string> = {
-    0: 'Pending',
-    1: 'Approved',
-    2: 'Rejected'
+    1: 'Pending',
+    2: 'Accepted',
+    3: 'Rejected'
   };
 
   let normalizedResult: string;
@@ -98,12 +100,14 @@ export function mapTestResult(result: string | number | undefined | null): { lab
   } else if (typeof result === 'number') {
     normalizedResult = numericMap[result] || 'Pending';
   } else {
-    normalizedResult = result;
+    let strVal = String(result);
+    if (strVal === 'Approved') strVal = 'Accepted';
+    normalizedResult = strVal;
   }
 
   const map: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-    'Pending': { label: 'قيد الانتظار', variant: 'secondary' },
-    'Approved': { label: 'مقبول', variant: 'default' },
+    'Pending': { label: 'قيد الفحص', variant: 'secondary' },
+    'Accepted': { label: 'مقبول', variant: 'default' },
     'Rejected': { label: 'مرفوض', variant: 'destructive' }
   };
 

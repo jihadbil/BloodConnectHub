@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Droplet, User, Lock, ArrowLeft, Heart, Loader2, AlertCircle } from "lucide-react";
+import { Droplet, User, Lock, ArrowLeft, Heart, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -12,6 +12,7 @@ const Login = () => {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { signIn, userRole, isAuthenticated } = useAuth();
@@ -60,7 +61,7 @@ const Login = () => {
           <Droplet className="h-10 w-10 text-primary animate-heartbeat" />
           <div className="flex flex-col items-center">
             <span className="text-xl font-bold text-foreground">
-              مستشفى غريان <span className="text-primary">المركزي</span>
+              مستشفى غريان <span className="text-primary">التعليمي</span>
             </span>
             <span className="text-sm text-muted-foreground">بنك الدم</span>
           </div>
@@ -113,15 +114,27 @@ const Login = () => {
                   <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    className="pr-10"
+                    className="pr-10 pl-10"
                     dir="ltr"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={isLoading}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                    disabled={isLoading}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -144,12 +157,6 @@ const Login = () => {
               </Link>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-border text-center text-sm">
-              <span className="text-muted-foreground">موظف في المستشفى؟ </span>
-              <Link to="/staff/login" className="text-primary font-medium hover:underline">
-                دخول الموظفين
-              </Link>
-            </div>
           </CardContent>
         </Card>
 

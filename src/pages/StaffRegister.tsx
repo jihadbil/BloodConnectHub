@@ -6,18 +6,87 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, User, Lock, Phone, Loader2, AlertCircle } from "lucide-react";
+import { Building2, User, Lock, Phone, Loader2, AlertCircle, Mail, Eye, EyeOff } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { authApi } from "@/api/auth";
+
+export const translateApiError = (msg: string): string => {
+  if (!msg) return msg;
+  
+  if (msg.includes(",")) {
+    return msg
+      .split(",")
+      .map(part => translateApiError(part.trim()))
+      .join(" • ");
+  }
+
+  const map: Record<string, string> = {
+    'Username already exists':         'اسم المستخدم مسجل مسبقاً، يرجى اختيار اسم آخر',
+    'Username is already taken':       'اسم المستخدم مستخدم مسبقاً، يرجى اختيار اسم آخر',
+    'Email already exists':            'البريد الإلكتروني مسجل مسبقاً',
+    'DuplicateUserName':               'اسم المستخدم مسجل مسبقاً، يرجى اختيار اسم آخر',
+    'DuplicateEmail':                  'البريد الإلكتروني مسجل مسبقاً',
+    'PasswordTooShort':                'كلمة المرور قصيرة جداً (يجب أن تكون 8 خانات على الأقل)',
+    'PasswordRequiresDigit':           'كلمة المرور يجب أن تحتوي على أرقام',
+    'PasswordRequiresUpper':           'كلمة المرور يجب أن تحتوي على حرف كبير',
+    'InvalidEmail':                    'صيغة البريد الإلكتروني غير صحيحة',
+  };
+  const cleanMsg = msg.trim();
+  if (map[cleanMsg]) return map[cleanMsg];
+
+  if (
+    cleanMsg.toLowerCase().includes("username already exists") ||
+    cleanMsg.toLowerCase().includes("duplicateusername") ||
+    cleanMsg.toLowerCase().includes("username is already taken") ||
+    (cleanMsg.toLowerCase().includes("username") && cleanMsg.toLowerCase().includes("already taken"))
+  ) {
+    return 'اسم المستخدم مسجل مسبقاً، يرجى اختيار اسم آخر';
+  }
+  if (
+    cleanMsg.toLowerCase().includes("email already exists") ||
+    cleanMsg.toLowerCase().includes("duplicateemail") ||
+    (cleanMsg.toLowerCase().includes("email") && cleanMsg.toLowerCase().includes("already taken"))
+  ) {
+    return 'البريد الإلكتروني مسجل مسبقاً';
+  }
+  if (
+    cleanMsg.toLowerCase().includes("passwordtooshort") ||
+    cleanMsg.toLowerCase().includes("password must be at least") ||
+    cleanMsg.toLowerCase().includes("passwords must be at least") ||
+    cleanMsg.toLowerCase().includes("password should be at least") ||
+    cleanMsg.toLowerCase().includes("password is too short")
+  ) {
+    return 'كلمة المرور قصيرة جداً (يجب أن تكون 8 خانات على الأقل)';
+  }
+  if (
+    cleanMsg.toLowerCase().includes("passwordrequiresdigit") ||
+    cleanMsg.toLowerCase().includes("password must have at least one digit") ||
+    cleanMsg.toLowerCase().includes("password requires digit")
+  ) {
+    return 'كلمة المرور يجب أن تحتوي على أرقام';
+  }
+  if (
+    cleanMsg.toLowerCase().includes("passwordrequiresupper") ||
+    cleanMsg.toLowerCase().includes("password must have at least one uppercase") ||
+    cleanMsg.toLowerCase().includes("password requires upper")
+  ) {
+    return 'كلمة المرور يجب أن تحتوي على حرف كبير';
+  }
+  
+  return cleanMsg;
+};
 
 const StaffRegister = () => {
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const [formData, setFormData] = useState({
         username: "",
+        email: "",
         fullName: "",
         phone: "",
         password: "",
@@ -35,7 +104,7 @@ const StaffRegister = () => {
         setSuccess(null);
 
         // Validation
-        if (!formData.username || !formData.fullName || !formData.phone) {
+        if (!formData.username || !formData.email || !formData.fullName || !formData.phone) {
             setError("يرجى ملء جميع الحقول المطلوبة");
             return;
         }
@@ -45,8 +114,13 @@ const StaffRegister = () => {
             return;
         }
 
-        if (formData.password.length < 6) {
-            setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل");
+        if (formData.password.length < 8) {
+            setError("كلمة المرور يجب أن تكون 8 خانات على الأقل");
+            return;
+        }
+
+        if (!/^\d+$/.test(formData.password)) {
+            setError("كلمة المرور يجب أن تحتوي على أرقام فقط");
             return;
         }
 
@@ -54,20 +128,23 @@ const StaffRegister = () => {
 
         try {
             const response = await authApi.register({
-                username: formData.username,
+                userName: formData.username,
+                email: formData.email,
                 password: formData.password,
                 fullName: formData.fullName,
-                phone: formData.phone,
-                roleId: 2, // Staff role (1=Admin, 2=Staff, 3=Donor)
+                phoneNumber: formData.phone,
             });
 
-            if (response.success) {
+            if (response.isSuccess) {
                 setSuccess("تم إنشاء حسابك بنجاح! يمكنك الآن تسجيل الدخول.");
                 setTimeout(() => {
-                    navigate("/staff/login");
+                    navigate("/login");
                 }, 2000);
             } else {
-                setError(response.message || response.errors?.join(', ') || "حدث خطأ أثناء التسجيل");
+                const combined = response.errors && response.errors.length > 0
+                    ? response.errors.map(translateApiError).join(' • ')
+                    : translateApiError(response.message || "حدث خطأ أثناء التسجيل");
+                setError(combined);
             }
         } catch (err) {
             setError("حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.");
@@ -89,7 +166,7 @@ const StaffRegister = () => {
                             <div>
                                 <CardTitle className="text-2xl">تسجيل موظف جديد</CardTitle>
                                 <CardDescription className="mt-2">
-                                    مستشفى غريان المركزي - بنك الدم
+                                    مستشفى غريان التعليمي - بنك الدم
                                 </CardDescription>
                             </div>
                         </CardHeader>
@@ -119,6 +196,25 @@ const StaffRegister = () => {
                                             className="pr-10"
                                             value={formData.username}
                                             onChange={(e) => handleChange("username", e.target.value)}
+                                            required
+                                            disabled={isLoading}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Email */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="email">البريد الإلكتروني *</Label>
+                                    <div className="relative">
+                                        <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            id="email"
+                                            type="email"
+                                            placeholder="أدخل البريد الإلكتروني"
+                                            className="pr-10"
+                                            dir="ltr"
+                                            value={formData.email}
+                                            onChange={(e) => handleChange("email", e.target.value)}
                                             required
                                             disabled={isLoading}
                                         />
@@ -164,14 +260,26 @@ const StaffRegister = () => {
                                         <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                         <Input
                                             id="password"
-                                            type="password"
+                                            type={showPassword ? "text" : "password"}
                                             placeholder="••••••••"
-                                            className="pr-10"
+                                            className="pr-10 pl-10"
                                             value={formData.password}
                                             onChange={(e) => handleChange("password", e.target.value)}
                                             required
                                             disabled={isLoading}
                                         />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                                            disabled={isLoading}
+                                        >
+                                            {showPassword ? (
+                                                <EyeOff className="h-4 w-4" />
+                                            ) : (
+                                                <Eye className="h-4 w-4" />
+                                            )}
+                                        </button>
                                     </div>
                                 </div>
 
@@ -182,19 +290,31 @@ const StaffRegister = () => {
                                         <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                         <Input
                                             id="confirmPassword"
-                                            type="password"
+                                            type={showConfirmPassword ? "text" : "password"}
                                             placeholder="••••••••"
-                                            className="pr-10"
+                                            className="pr-10 pl-10"
                                             value={formData.confirmPassword}
                                             onChange={(e) => handleChange("confirmPassword", e.target.value)}
                                             required
                                             disabled={isLoading}
                                         />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                                            disabled={isLoading}
+                                        >
+                                            {showConfirmPassword ? (
+                                                <EyeOff className="h-4 w-4" />
+                                            ) : (
+                                                <Eye className="h-4 w-4" />
+                                            )}
+                                        </button>
                                     </div>
                                 </div>
 
                                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-                                    <p>هذا التسجيل مخصص لموظفي مستشفى غريان المركزي فقط.</p>
+                                    <p>هذا التسجيل مخصص لموظفي مستشفى غريان التعليمي فقط.</p>
                                 </div>
 
                                 <Button type="submit" className="w-full" disabled={isLoading}>
@@ -211,7 +331,7 @@ const StaffRegister = () => {
 
                             <div className="mt-6 text-center text-sm text-muted-foreground">
                                 <p>لديك حساب بالفعل؟{" "}
-                                    <Link to="/staff/login" className="text-primary hover:underline font-medium">
+                                    <Link to="/login" className="text-primary hover:underline font-medium">
                                         تسجيل الدخول
                                     </Link>
                                 </p>

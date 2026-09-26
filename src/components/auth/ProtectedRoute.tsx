@@ -25,10 +25,7 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   }
 
   if (!isAuthenticated || !user) {
-    // Redirect to appropriate login page based on the route
-    if (location.pathname.startsWith("/staff") || location.pathname.startsWith("/admin")) {
-      return <Navigate to="/staff/login" state={{ from: location }} replace />;
-    }
+    // Redirect to login page
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
