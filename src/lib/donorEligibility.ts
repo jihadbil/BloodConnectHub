@@ -1,4 +1,4 @@
-import { DonorEligibility } from '@/types/blood-request-response';
+import { DonorEligibility } from '@/types/donor-response';
 
 /**
  * Minimum days required between donations (90 days = 3 months)

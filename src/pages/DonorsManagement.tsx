@@ -18,23 +18,40 @@ import {
     Phone,
     Calendar,
     Search,
-    Eye,
     Trash2,
     Edit,
     Loader2,
     RefreshCw,
     AlertCircle,
     CheckCircle2,
-    XCircle,
     MapPin,
-    User
+    User,
+    FileText
 } from "lucide-react";
-import { useDonors, useCreateDonor, useUpdateDonor, useDeleteDonor, useCheckDonorEligibility } from "@/hooks/useDonors";
+import { useDonors, useCreateDonor, useUpdateDonor, useDeleteDonor, useCheckDonorEligibility, useApproveDonor } from "@/hooks/useDonors";
+import { usePendingBloodRequests } from "@/hooks/useBloodRequests";
+import { donorResponsesApi } from "@/api/donorResponses";
 import { BLOOD_TYPE_MAP, BLOOD_TYPE_REVERSE_MAP } from "@/types/api";
 import { formatDate, mapGender } from "@/lib/utils";
 import type { Gender, CreateDonorRequest, UpdateDonorRequest } from "@/types/api";
+import { MedicalDocumentsDialog } from "@/components/donors/MedicalDocumentsDialog";
+import { useToast } from "@/hooks/use-toast";
+import { donorsApi } from "@/api/donors";
 
 const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+
+// ─── تعريف حالات الموافقة الخمس ────────────────────────────────────────────
+const APPROVAL_STATUSES = [
+    { value: 1, label: "في انتظار رفع المستندات",   color: "border-gray-400   text-gray-500   bg-gray-50"    },
+    { value: 2, label: "في انتظار الموافقة",         color: "border-yellow-500 text-yellow-600 bg-yellow-50"  },
+    { value: 3, label: "مقبول",                      color: "border-green-500  text-green-700  bg-green-50"   },
+    { value: 4, label: "مرفوض",                      color: "border-red-500    text-red-700    bg-red-50"     },
+    { value: 5, label: "مطلوب وثائق إضافية",         color: "border-orange-400 text-orange-600 bg-orange-50"  },
+] as const;
+
+const getApprovalStatus = (val: number) =>
+    APPROVAL_STATUSES.find(s => s.value === val) ??
+    { value: val, label: "غير معروف", color: "border-gray-300 text-gray-400 bg-white" };
 
 // Loading skeleton for table
 const TableSkeleton = ({ rows = 5 }: { rows?: number }) => (
@@ -46,12 +63,20 @@ const TableSkeleton = ({ rows = 5 }: { rows?: number }) => (
 );
 
 const DonorsManagement = () => {
+    const { toast } = useToast();
     const [page, setPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterBloodType, setFilterBloodType] = useState("all");
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    // Dialog للحالات التي تحتاج ملاحظة (رفض أو طلب وثائق إضافية)
+    const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
+    const [isDocsDialogOpen, setIsDocsDialogOpen] = useState(false);
     const [selectedDonor, setSelectedDonor] = useState<number | null>(null);
+    const [pendingStatusChange, setPendingStatusChange] = useState<{ donorId: number; newStatus: number } | null>(null);
+    const [selectedDonorForDocs, setSelectedDonorForDocs] = useState<{id: number, name: string} | null>(null);
+    const [statusNote, setStatusNote] = useState("");
+    const [filterApprovalStatus, setFilterApprovalStatus] = useState<string>("all");
 
     // Form state
     const [formData, setFormData] = useState({
@@ -62,26 +87,34 @@ const DonorsManagement = () => {
         phone: "",
         bloodType: "",
         city: "",
+        requestId: "",
     });
 
     // جلب البيانات
     const { data, isLoading, error, refetch } = useDonors(page, 10);
+    const { data: pendingRequestsData, isLoading: requestsLoading } = usePendingBloodRequests();
+    const pendingRequests = pendingRequestsData?.data || [];
     const createDonor = useCreateDonor();
     const updateDonor = useUpdateDonor();
     const deleteDonor = useDeleteDonor();
     const checkEligibility = useCheckDonorEligibility();
+    const approveDonor = useApproveDonor();
 
     // تحويل البيانات
     const donors = data?.data?.items?.map(donor => {
-        // Handle different possible field names from API
+        // Handle different possible field names from API (PascalCase vs camelCase)
         const donorAny = donor as any;
-        const bloodTypeId = donor.bloodTypeId ?? donorAny.BloodTypeID ?? donorAny.bloodTypeID;
+        // API يُرجع donorID بالـ PascalCase — نقرأ كلا الصيغتين
+        const donorId = donorAny.donorID ?? donorAny.donorId ?? donor.donorId;
+        const nationalId = donorAny.nationalID ?? donorAny.nationalId ?? donor.nationalId;
+        const bloodTypeId = donor.bloodTypeId ?? donorAny.BloodTypeID ?? donorAny.bloodTypeID ?? donorAny.bloodTypeId;
         const bloodTypeName = donor.bloodType?.typeName ?? donorAny.bloodType?.TypeName ?? donorAny.BloodType?.typeName ?? donorAny.BloodType?.TypeName;
+        const approvalStatus = donorAny.ApprovalStatus ?? donorAny.approvalStatus ?? 1;
 
         return {
-            id: donor.donorId,
+            id: donorId,
             name: donor.fullName,
-            nationalId: donor.nationalId,
+            nationalId: nationalId,
             bloodType: bloodTypeName || BLOOD_TYPE_MAP[bloodTypeId] || 'غير محدد',
             bloodTypeId: bloodTypeId,
             phone: donor.phone,
@@ -90,16 +123,21 @@ const DonorsManagement = () => {
             dateOfBirth: donor.dateOfBirth,
             lastDonation: donor.lastDonationDate ? formatDate(donor.lastDonationDate) : 'لم يتبرع بعد',
             isActive: donor.isActive,
+            approvalStatus: approvalStatus,
+            rejectionReason: donor.rejectionReason,
+            approvalDate: donor.approvalDate,
+            userEmail: donor.userEmail,
         };
     }) || [];
 
     // تصفية البيانات
     const filteredDonors = donors.filter(donor => {
-        const matchesSearch = donor.name.includes(searchTerm) ||
-            donor.phone.includes(searchTerm) ||
-            donor.nationalId.includes(searchTerm);
+        const matchesSearch = (donor.name ?? '').includes(searchTerm) ||
+            (donor.phone ?? '').includes(searchTerm) ||
+            (donor.nationalId ?? '').includes(searchTerm);
         const matchesBloodType = filterBloodType === "all" || donor.bloodType === filterBloodType;
-        return matchesSearch && matchesBloodType;
+        const matchesApproval = filterApprovalStatus === "all" || donor.approvalStatus?.toString() === filterApprovalStatus;
+        return matchesSearch && matchesBloodType && matchesApproval;
     });
 
     // معالجة إضافة متبرع
@@ -110,10 +148,75 @@ const DonorsManagement = () => {
             return;
         }
 
+        if (formData.nationalId.length !== 12) {
+            toast({
+                title: "خطأ في التحقق",
+                description: "الرقم الوطني يجب أن يتكون من 12 خانة بالضبط",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        const firstDigit = formData.nationalId[0];
+        if (firstDigit !== "1" && firstDigit !== "2") {
+            toast({
+                title: "خطأ في التحقق",
+                description: "الرقم الوطني يجب أن يبدأ بالرقم 1 (للذكور) أو 2 (للإناث)",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (formData.gender === "Male" && firstDigit !== "1") {
+            toast({
+                title: "خطأ في التحقق",
+                description: "تضارب في البيانات: الرقم الوطني يبدأ بـ 2 (أنثى) ولكن الجنس المختار هو ذكر",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (formData.gender === "Female" && firstDigit !== "2") {
+            toast({
+                title: "خطأ في التحقق",
+                description: "تضارب في البيانات: الرقم الوطني يبدأ بـ 1 (ذكر) ولكن الجنس المختار هو أنثى",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (formData.dateOfBirth) {
+            const nationalIdYear = formData.nationalId.substring(1, 5);
+            const dobYear = formData.dateOfBirth.split("-")[0];
+            if (nationalIdYear !== dobYear) {
+                toast({
+                    title: "خطأ في التحقق",
+                    description: `تضارب في البيانات: سنة الميلاد في الرقم الوطني (${nationalIdYear}) لا تطابق سنة الميلاد في تاريخ الميلاد المحدد (${dobYear})`,
+                    variant: "destructive",
+                });
+                return;
+            }
+        }
+
+        try {
+            // التحقق من أن الرقم الوطني غير مسجل مسبقاً لدى متبرع آخر
+            const nationalIdCheck = await donorsApi.getByNationalId(formData.nationalId);
+            if (nationalIdCheck.isSuccess && nationalIdCheck.data) {
+                toast({
+                    title: "رقم وطني مكرر",
+                    description: "الرقم الوطني مسجل مسبقاً لدى متبرع آخر",
+                    variant: "destructive",
+                });
+                return;
+            }
+        } catch (checkError) {
+            console.error("خطأ أثناء التحقق من الرقم الوطني:", checkError);
+        }
+
         const newDonor: CreateDonorRequest = {
             fullName: formData.fullName,
             nationalID: formData.nationalId,
-            gender: formData.gender === 'Male' ? 0 : 1, // 0=Male, 1=Female
+            gender: formData.gender === 'Male' ? 1 : 2, // 1=Male, 2=Female
             dateOfBirth: formData.dateOfBirth,
             phone: formData.phone,
             bloodTypeID: BLOOD_TYPE_REVERSE_MAP[formData.bloodType],
@@ -121,9 +224,27 @@ const DonorsManagement = () => {
             isActive: true
         };
 
-        await createDonor.mutateAsync(newDonor);
-        setIsAddDialogOpen(false);
-        resetForm();
+        try {
+            const result = await createDonor.mutateAsync(newDonor);
+            if (result.isSuccess && result.data && formData.requestId) {
+                const donorId = result.data.donorID || result.data.donorId;
+                if (donorId) {
+                    await donorResponsesApi.create({
+                        donorId,
+                        requestId: parseInt(formData.requestId),
+                        notes: "تسجيل يدوي للمتبرع لصالح المريض"
+                    });
+                }
+            }
+            setIsAddDialogOpen(false);
+            resetForm();
+            toast({
+                title: "تمت الإضافة بنجاح",
+                description: "تم إضافة المتبرع بنجاح",
+            });
+        } catch {
+            // Error is handled in useCreateDonor's onError handler
+        }
     };
 
     // معالجة تعديل متبرع
@@ -140,26 +261,53 @@ const DonorsManagement = () => {
             isActive: true
         };
 
-        await updateDonor.mutateAsync({ id: selectedDonor, data: updatedDonor });
-        setIsEditDialogOpen(false);
-        resetForm();
+        try {
+            await updateDonor.mutateAsync({ id: selectedDonor, data: updatedDonor });
+            setIsEditDialogOpen(false);
+            resetForm();
+        } catch {
+            // Error is handled in useUpdateDonor's onError handler
+        }
     };
 
     // معالجة حذف متبرع
     const handleDeleteDonor = async (donorId: number) => {
         if (confirm("هل أنت متأكد من حذف هذا المتبرع؟")) {
-            await deleteDonor.mutateAsync(donorId);
+            try {
+                await deleteDonor.mutateAsync(donorId);
+            } catch {
+                // Error is handled in useDeleteDonor's onError handler
+            }
         }
     };
 
-    // فحص أهلية التبرع
-    const handleCheckEligibility = async (donorId: number) => {
-        const result = await checkEligibility.mutateAsync(donorId);
-        if (result.success && result.data) {
-            alert(result.data.isEligible
-                ? "✅ المتبرع مؤهل للتبرع"
-                : `❌ ${result.data.reason || 'المتبرع غير مؤهل للتبرع'}`
-            );
+    // معالجة تغيير حالة الموافقة عبر الكومبو بوكس
+    const handleStatusChange = (donorId: number, newStatus: number) => {
+        // الحالات 4 (مرفوض) و 5 (مطلوب وثائق إضافية) تحتاج ملاحظة
+        if (newStatus === 4 || newStatus === 5) {
+            setPendingStatusChange({ donorId, newStatus });
+            setStatusNote("");
+            setIsNoteDialogOpen(true);
+        } else {
+            approveDonor.mutate({ id: donorId, data: { newStatus } });
+        }
+    };
+
+    const submitStatusWithNote = async () => {
+        if (!pendingStatusChange) return;
+        try {
+            await approveDonor.mutateAsync({
+                id: pendingStatusChange.donorId,
+                data: {
+                    newStatus: pendingStatusChange.newStatus,
+                    rejectionReason: statusNote || undefined,
+                }
+            });
+            setIsNoteDialogOpen(false);
+            setPendingStatusChange(null);
+            setStatusNote("");
+        } catch {
+            // Error is handled in useApproveDonor's onError handler
         }
     };
 
@@ -188,6 +336,7 @@ const DonorsManagement = () => {
             phone: "",
             bloodType: "",
             city: "",
+            requestId: "",
         });
         setSelectedDonor(null);
     };
@@ -241,7 +390,12 @@ const DonorsManagement = () => {
                                             <Label>الرقم الوطني *</Label>
                                             <Input
                                                 value={formData.nationalId}
-                                                onChange={(e) => setFormData(prev => ({ ...prev, nationalId: e.target.value }))}
+                                                onChange={(e) => {
+                                                    const sanitized = e.target.value.replace(/\D/g, "");
+                                                    if (sanitized.length <= 12) {
+                                                        setFormData(prev => ({ ...prev, nationalId: sanitized }));
+                                                    }
+                                                }}
                                                 placeholder="أدخل الرقم الوطني"
                                                 required
                                             />
@@ -308,6 +462,46 @@ const DonorsManagement = () => {
                                             onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
                                             placeholder="أدخل المدينة"
                                         />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>طلب الدم / المريض (اختياري)</Label>
+                                        <Select
+                                            value={formData.requestId}
+                                            onValueChange={(v) => {
+                                                setFormData(prev => ({ ...prev, requestId: v }));
+                                                const selectedReq = pendingRequests.find(r => r.requestId.toString() === v);
+                                                if (selectedReq) {
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        bloodType: BLOOD_TYPE_MAP[selectedReq.bloodTypeId] || prev.bloodType
+                                                    }));
+                                                }
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="اختر طلب الدم / المريض" />
+                                            </SelectTrigger>
+                                            <SelectContent position="popper" className="max-h-[200px]">
+                                                {requestsLoading ? (
+                                                    <div className="p-2 text-center text-sm text-muted-foreground">
+                                                        جاري التحميل...
+                                                    </div>
+                                                ) : pendingRequests.length === 0 ? (
+                                                    <div className="p-2 text-center text-sm text-muted-foreground">
+                                                        لا توجد طلبات معلقة نشطة
+                                                    </div>
+                                                ) : (
+                                                    pendingRequests.map((req) => (
+                                                        <SelectItem
+                                                            key={req.requestId}
+                                                            value={req.requestId.toString()}
+                                                        >
+                                                            {req.patient?.fullName || req.patientName || 'مريض'} - فصيلة {BLOOD_TYPE_MAP[req.bloodTypeId]} (طلب #{req.requestId})
+                                                        </SelectItem>
+                                                    ))
+                                                )}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                     <div className="flex gap-3">
                                         <Button type="submit" className="flex-1" disabled={createDonor.isPending}>
@@ -398,6 +592,17 @@ const DonorsManagement = () => {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                <Select value={filterApprovalStatus} onValueChange={setFilterApprovalStatus}>
+                                    <SelectTrigger className="w-full sm:w-48">
+                                        <SelectValue placeholder="حالة الموافقة" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">جميع الحالات</SelectItem>
+                                        {APPROVAL_STATUSES.map(s => (
+                                            <SelectItem key={s.value} value={s.value.toString()}>{s.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                                 <Button variant="outline" size="icon" onClick={() => refetch()}>
                                     <RefreshCw className="h-4 w-4" />
                                 </Button>
@@ -470,20 +675,44 @@ const DonorsManagement = () => {
                                                     </span>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={donor.isActive ? "default" : "secondary"}>
-                                                        {donor.isActive ? "نشط" : "غير نشط"}
-                                                    </Badge>
+                                                    {/* ── Combobox تغيير حالة الموافقة ── */}
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={`w-fit text-xs ${getApprovalStatus(donor.approvalStatus).color}`}
+                                                        >
+                                                            {getApprovalStatus(donor.approvalStatus).label}
+                                                        </Badge>
+                                                        <Select
+                                                            value={donor.approvalStatus?.toString()}
+                                                            onValueChange={(v) => handleStatusChange(donor.id, parseInt(v))}
+                                                            disabled={approveDonor.isPending}
+                                                        >
+                                                            <SelectTrigger className="h-7 text-xs w-44">
+                                                                <SelectValue placeholder="تغيير الحالة" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {APPROVAL_STATUSES.map(s => (
+                                                                    <SelectItem key={s.value} value={s.value.toString()} className="text-xs">
+                                                                        {s.label}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-1">
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            title="فحص الأهلية"
-                                                            onClick={() => handleCheckEligibility(donor.id)}
-                                                            disabled={checkEligibility.isPending}
+                                                            title="الوثائق الطبية"
+                                                            onClick={() => {
+                                                                setSelectedDonorForDocs({ id: donor.id, name: donor.name });
+                                                                setIsDocsDialogOpen(true);
+                                                            }}
                                                         >
-                                                            <CheckCircle2 className="h-4 w-4 text-success" />
+                                                            <FileText className="h-4 w-4 text-blue-600" />
                                                         </Button>
                                                         <Button
                                                             variant="ghost"
@@ -606,6 +835,64 @@ const DonorsManagement = () => {
                         </form>
                     </DialogContent>
                 </Dialog>
+
+                {/* Note Dialog — يظهر عند اختيار "مرفوض" أو "مطلوب وثائق إضافية" */}
+                <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
+                    <DialogContent className="max-w-md" dir="rtl">
+                        <DialogHeader>
+                            <DialogTitle>
+                                {pendingStatusChange?.newStatus === 4 ? "رفض المتبرع" : "طلب وثائق إضافية"}
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 mt-4">
+                            <div className="space-y-2">
+                                <Label>
+                                    {pendingStatusChange?.newStatus === 4
+                                        ? "سبب الرفض *"
+                                        : "ملاحظة للمتبرع (اختياري)"}
+                                </Label>
+                                <Input
+                                    value={statusNote}
+                                    onChange={(e) => setStatusNote(e.target.value)}
+                                    placeholder={
+                                        pendingStatusChange?.newStatus === 4
+                                            ? "أدخل سبب رفض المتبرع..."
+                                            : "حدد الوثائق المطلوبة..."
+                                    }
+                                    required={pendingStatusChange?.newStatus === 4}
+                                />
+                            </div>
+                            <div className="flex gap-3">
+                                <Button
+                                    variant={pendingStatusChange?.newStatus === 4 ? "destructive" : "default"}
+                                    className="flex-1"
+                                    onClick={submitStatusWithNote}
+                                    disabled={
+                                        (pendingStatusChange?.newStatus === 4 && !statusNote) ||
+                                        approveDonor.isPending
+                                    }
+                                >
+                                    {approveDonor.isPending ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : null}
+                                    تأكيد
+                                </Button>
+                                <Button variant="outline" onClick={() => { setIsNoteDialogOpen(false); setPendingStatusChange(null); }}>
+                                    إلغاء
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Medical Documents Dialog */}
+                <MedicalDocumentsDialog 
+                    isOpen={isDocsDialogOpen} 
+                    onClose={() => {
+                        setIsDocsDialogOpen(false);
+                        setSelectedDonorForDocs(null);
+                    }} 
+                    donorId={selectedDonorForDocs?.id || null} 
+                    donorName={selectedDonorForDocs?.name || ''} 
+                />
             </main>
             <Footer />
         </div>

@@ -1,7 +1,7 @@
 // React Query hooks for Donors API
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { donorsApi } from '@/api/donors';
-import type { CreateDonorRequest, UpdateDonorRequest } from '@/types/api';
+import type { CreateDonorRequest, UpdateDonorRequest, ApproveDonorDto, DonorApprovalStatus } from '@/types/api';
 import { useToast } from '@/hooks/use-toast';
 
 // Query keys
@@ -13,6 +13,7 @@ export const donorKeys = {
   detail: (id: number) => [...donorKeys.details(), id] as const,
   eligible: (bloodTypeId?: number) => [...donorKeys.all, 'eligible', bloodTypeId] as const,
   donations: (id: number) => [...donorKeys.all, 'donations', id] as const,
+  byStatus: (status: string, page: number, pageSize: number) => [...donorKeys.all, 'status', status, page, pageSize] as const,
 };
 
 /**
@@ -26,6 +27,16 @@ export function useDonors(page = 1, pageSize = 10) {
 }
 
 /**
+ * تصفية المتبرعين بحالة الموافقة
+ */
+export function useDonorsByStatus(status: DonorApprovalStatus, page = 1, pageSize = 10) {
+  return useQuery({
+    queryKey: donorKeys.byStatus(status, page, pageSize),
+    queryFn: () => donorsApi.getByStatus(status, page, pageSize),
+  });
+}
+
+/**
  * جلب تفاصيل متبرع
  */
 export function useDonor(id: number) {
@@ -33,6 +44,18 @@ export function useDonor(id: number) {
     queryKey: donorKeys.detail(id),
     queryFn: () => donorsApi.getById(id),
     enabled: !!id,
+  });
+}
+
+/**
+ * جلب المتبرع عبر معرف المستخدم (للمتبرع المسجل الدخول)
+ */
+export function useDonorByUserId(userId: string) {
+  return useQuery({
+    queryKey: [...donorKeys.all, 'byUser', userId] as const,
+    queryFn: () => donorsApi.getByUserId(userId),
+    enabled: !!userId,
+    retry: false, // لا إعادة محاولة إذا لم يجد المتبرع
   });
 }
 
@@ -67,7 +90,7 @@ export function useCreateDonor() {
   return useMutation({
     mutationFn: (data: CreateDonorRequest) => donorsApi.create(data),
     onSuccess: (response) => {
-      if (response.success) {
+      if (response.isSuccess) {
         queryClient.invalidateQueries({ queryKey: donorKeys.all });
         toast({
           title: 'تم بنجاح',
@@ -102,7 +125,7 @@ export function useUpdateDonor() {
     mutationFn: ({ id, data }: { id: number; data: UpdateDonorRequest }) =>
       donorsApi.update(id, data),
     onSuccess: (response, { id }) => {
-      if (response.success) {
+      if (response.isSuccess) {
         queryClient.invalidateQueries({ queryKey: donorKeys.detail(id) });
         queryClient.invalidateQueries({ queryKey: donorKeys.lists() });
         toast({
@@ -137,7 +160,7 @@ export function useDeleteDonor() {
   return useMutation({
     mutationFn: (id: number) => donorsApi.delete(id),
     onSuccess: (response) => {
-      if (response.success) {
+      if (response.isSuccess) {
         queryClient.invalidateQueries({ queryKey: donorKeys.all });
         toast({
           title: 'تم بنجاح',
@@ -170,13 +193,47 @@ export function useCheckDonorEligibility() {
   return useMutation({
     mutationFn: (id: number) => donorsApi.checkEligibility(id),
     onSuccess: (response) => {
-      if (response.success) {
+      if (response.isSuccess) {
         toast({
           title: response.data ? 'مؤهل للتبرع' : 'غير مؤهل',
           description: response.message,
           variant: response.data ? 'default' : 'destructive',
         });
       }
+    },
+  });
+}
+
+/**
+ * الموافقة أو رفض متبرع
+ */
+export function useApproveDonor() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: ApproveDonorDto }) => donorsApi.approve(id, data),
+    onSuccess: (response) => {
+      if (response.isSuccess) {
+        queryClient.invalidateQueries({ queryKey: donorKeys.all });
+        toast({
+          title: 'تم بنجاح',
+          description: response.message || 'تم تحديث حالة المتبرع',
+        });
+      } else {
+        toast({
+          title: 'خطأ',
+          description: response.message || 'فشل في تحديث حالة المتبرع',
+          variant: 'destructive',
+        });
+      }
+    },
+    onError: () => {
+      toast({
+        title: 'خطأ',
+        description: 'فشل الاتصال بالخادم',
+        variant: 'destructive',
+      });
     },
   });
 }

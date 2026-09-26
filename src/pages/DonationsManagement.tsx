@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -24,10 +24,22 @@ import {
     CheckCircle2,
     XCircle,
     Clock,
-    User
+    User,
+    FlaskConical,
+    Upload,
+    FileCheck,
+    Package
 } from "lucide-react";
-import { useDonations, useCreateDonation, useUpdateDonationTestResult, useApprovedDonations } from "@/hooks/useDonations";
+import { useDonations, useCreateDonation, useUpdateDonationTestResult, useRecentDonations, usePerformLabTest } from "@/hooks/useDonations";
 import { useDonors } from "@/hooks/useDonors";
+import { useUploadDocument } from "@/hooks/useMedicalDocuments";
+import { useUpdateInventoryQuantity } from "@/hooks/useInventory";
+import { useUpdateResponseStatus } from "@/hooks/useDonorResponses";
+import { useUpdateBloodRequestStatus, usePendingBloodRequests } from "@/hooks/useBloodRequests";
+import { donorResponsesApi } from "@/api/donorResponses";
+import { bloodRequestsApi } from "@/api/bloodRequests";
+import { ResponseStatus } from "@/types/donor-response";
+import { useToast } from "@/hooks/use-toast";
 import { BLOOD_TYPE_MAP, BLOOD_TYPE_REVERSE_MAP } from "@/types/api";
 import { formatDate, mapTestResult } from "@/lib/utils";
 import type { TestResult, CreateDonationRequest, UpdateTestResultRequest } from "@/types/api";
@@ -54,21 +66,55 @@ const DonationsManagement = () => {
         donorId: "",
         bloodType: "",
         quantity: "1",
-        notes: ""
+        notes: "",
+        // حقل تمّ اعتماد المعمل وتحديث المخزون فوراً
+        labApproved: false,
+        labNotes: "",
+        requestId: "",
     });
+    const [labFile, setLabFile] = useState<File | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // جلب البيانات
     const { data, isLoading, error, refetch } = useDonations(page, 10);
     const { data: donorsData, isLoading: donorsLoading } = useDonors(1, 100);
-    const { data: approvedData } = useApprovedDonations();
+    const { data: recentData } = useRecentDonations(30);
+    const { data: pendingRequestsData, isLoading: requestsLoading } = usePendingBloodRequests();
+    const pendingRequests = pendingRequestsData?.data || [];
     const createDonation = useCreateDonation();
     const updateTestResult = useUpdateDonationTestResult();
+    const performLabTest = usePerformLabTest();
+    const uploadDocument = useUploadDocument();
+    const updateInventory = useUpdateInventoryQuantity();
+
+    const { toast } = useToast();
+
+    // Lab Test Dialog State
+    const [isLabTestDialogOpen, setIsLabTestDialogOpen] = useState(false);
+    const [selectedDonationForLabTest, setSelectedDonationForLabTest] = useState<number | null>(null);
+    const [selectedDonationInfo, setSelectedDonationInfo] = useState<{
+        id: number;
+        donorId: number;
+        bloodTypeId: number;
+        quantity: number;
+    } | null>(null);
+    const [labTestForm, setLabTestForm] = useState({
+        testResult: "Accepted", // Accepted or Rejected
+        testNotes: "",
+        addToInventoryIfAccepted: true
+    });
+    const [labTestFile, setLabTestFile] = useState<File | null>(null);
+    const labTestFileInputRef = useRef<HTMLInputElement>(null);
+
+    const updateResponseStatus = useUpdateResponseStatus();
+    const updateBloodRequestStatus = useUpdateBloodRequestStatus();
 
     // تحويل البيانات
     const normalizeTestResult = (result: string | number | undefined | null): string => {
-        const numericMap: Record<number, string> = { 0: 'Pending', 1: 'Approved', 2: 'Rejected' };
+        const numericMap: Record<number, string> = { 1: 'Pending', 2: 'Accepted', 3: 'Rejected' };
         if (result === null || result === undefined) return 'Pending';
         if (typeof result === 'number') return numericMap[result] || 'Pending';
+        if (result === 'Approved') return 'Accepted';
         return result;
     };
 
@@ -108,21 +154,14 @@ const DonationsManagement = () => {
             quantity: donation.quantity || 0,
             donationDate: donation.donationDate ? formatDate(donation.donationDate) : 'غير محدد',
             testResult: normalizeTestResult(donation.testResult),
-            notes: donation.notes || ''
+            notes: donation.notes || '',
+            testedAt: donation.testedAt ? formatDate(donation.testedAt) : null,
+            testNotes: donation.testNotes || '',
+            isAddedToInventory: !!donation.isAddedToInventory
         };
     });
 
 
-    // Debug: log data to understand structure
-    console.log('Donations API Response:', data?.data?.items?.[0]);
-    console.log('First donation donorID:', data?.data?.items?.[0]?.donorID);
-    console.log('First donation donorName:', data?.data?.items?.[0]?.donorName);
-    console.log('Donors available:', donors.length);
-    if (donors.length > 0) {
-        console.log('First Donor:', donors[0]);
-        console.log('Donor Keys:', Object.keys(donors[0]));
-    }
-    console.log('Processed donations:', donations[0]);
 
     // تصفية البيانات
     const filteredDonations = donations.filter(donation => {
@@ -134,31 +173,217 @@ const DonationsManagement = () => {
     // معالجة إضافة تبرع
     const handleAddDonation = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!formData.donorId || !formData.bloodType) return;
 
-        if (!formData.donorId || !formData.bloodType) {
-            return;
-        }
+        const bloodTypeId = BLOOD_TYPE_REVERSE_MAP[formData.bloodType];
+        const quantity = parseInt(formData.quantity);
+
+        const selectedReq = formData.requestId
+            ? pendingRequests.find(r => r.requestId.toString() === formData.requestId)
+            : null;
+
+        const patientName = selectedReq?.patient?.fullName || selectedReq?.patientName;
+        const requestNotePart = selectedReq
+            ? `تبرع للمريض: ${patientName || 'غير محدد'} (طلب #${formData.requestId})`
+            : '';
+
+        const finalNotes = [requestNotePart, formData.notes].filter(Boolean).join(' - ');
 
         const newDonation: CreateDonationRequest = {
             donorID: parseInt(formData.donorId),
-            bloodTypeID: BLOOD_TYPE_REVERSE_MAP[formData.bloodType],
-            donationDate: new Date().toISOString().split('T')[0], // اليوم
-            quantity: parseInt(formData.quantity),
-            testResult: 0, // 0=Pending
-            notes: formData.notes
+            bloodTypeID: bloodTypeId,
+            donationDate: new Date().toISOString().split('T')[0],
+            quantity,
+            notes: finalNotes || undefined
         };
 
-        await createDonation.mutateAsync(newDonation);
+        const result = await createDonation.mutateAsync(newDonation);
+
+        // إذا تمت الموافقة المخبرية مسبقاً أو تم ربطها بطلب دم
+        if (result.isSuccess) {
+            const donationAny = result.data as any;
+            const newDonationId = donationAny?.donationID ?? donationAny?.donationId ?? (result.data as any)?.id;
+
+            if (newDonationId && formData.labApproved) {
+                // 1️⃣ تسجيل نتيجة الفحص (سليم)
+                await performLabTest.mutateAsync({
+                    id: newDonationId,
+                    data: {
+                        testResult: 'Accepted' as TestResult,
+                        testNotes: formData.labNotes || null,
+                        addToInventoryIfAccepted: true,
+                    }
+                });
+
+                // 2️⃣ تحديث المخزون مباشرةً عبر نقطة النهاية
+                await updateInventory.mutateAsync({
+                    bloodTypeId,
+                    data: { quantityChange: quantity }
+                });
+
+                // 3️⃣ رفع وثيقة المعمل إن وجدت
+                if (labFile) {
+                    await uploadDocument.mutateAsync({
+                        donorId: parseInt(formData.donorId),
+                        documentType: 'LabReport',
+                        file: labFile,
+                    });
+                }
+            }
+
+            // ربط التبرع بطلب الدم والمريض في دورة الحياة
+            if (formData.requestId) {
+                try {
+                    // Check if a response already exists for this donor and request
+                    const responsesResult = await donorResponsesApi.getByDonorId(parseInt(formData.donorId));
+                    let response = responsesResult.isSuccess && responsesResult.data
+                        ? responsesResult.data.find(r => r.requestId === parseInt(formData.requestId))
+                        : null;
+
+                    if (!response) {
+                        // Create a response if it doesn't exist
+                        const createResult = await donorResponsesApi.create({
+                            donorId: parseInt(formData.donorId),
+                            requestId: parseInt(formData.requestId),
+                            notes: "تسجيل يدوي للتبرع"
+                        });
+                        if (createResult.isSuccess && createResult.data) {
+                            response = createResult.data;
+                        }
+                    }
+
+                    if (response) {
+                        if (formData.labApproved) {
+                            // If lab approved immediately, update status to Donated
+                            await updateResponseStatus.mutateAsync({
+                                id: response.responseId,
+                                data: {
+                                    status: ResponseStatus.Donated,
+                                    notes: formData.labNotes || "تم قبول التبرع مخبرياً وتحديث الحالة تلقائياً",
+                                    donationId: newDonationId
+                                }
+                            });
+
+                            // Check and update blood request status to Fulfilled if needed
+                            if (selectedReq) {
+                                const alreadyFulfilled = selectedReq.quantityFulfilled ?? 0;
+                                const totalFulfilled = alreadyFulfilled + quantity;
+                                const needed = selectedReq.quantityNeeded ?? 0;
+
+                                if (totalFulfilled >= needed) {
+                                    await updateBloodRequestStatus.mutateAsync({
+                                        id: selectedReq.requestId,
+                                        status: 'Fulfilled',
+                                        notes: 'تم تلبية جميع الوحدات المطلوبة',
+                                    });
+                                }
+                            }
+                        } else {
+                            // If not lab approved yet, update response status to Confirmed so it shows as Confirmed in dashboard
+                            await updateResponseStatus.mutateAsync({
+                                id: response.responseId,
+                                data: {
+                                    status: ResponseStatus.Confirmed,
+                                    notes: "تم تسجيل التبرع يدوياً وهو قيد الفحص المخبري"
+                                }
+                            });
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error updating response status:", err);
+                }
+            }
+        }
+
         setIsAddDialogOpen(false);
         resetForm();
     };
 
-    // معالجة تحديث نتيجة الفحص
-    const handleUpdateTestResult = async (donationId: number, result: TestResult) => {
-        await updateTestResult.mutateAsync({
-            id: donationId,
-            data: { testResult: result }
+    // معالجة فحص مخبري جديد
+    const handlePerformLabTest = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedDonationForLabTest || !selectedDonationInfo) return;
+
+        // التحقق من الملف عند الموافقة
+        if (labTestForm.testResult === 'Accepted' && !labTestFile) {
+            toast({
+                title: 'ملف مطلوب',
+                description: 'يجب إرفاق تقرير المختبر قبل قبول العينة',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        // 1️⃣ تسجيل نتيجة الفحص
+        const labResult = await performLabTest.mutateAsync({
+            id: selectedDonationForLabTest,
+            data: {
+                testResult: labTestForm.testResult as TestResult,
+                testNotes: labTestForm.testNotes || null,
+                addToInventoryIfAccepted: labTestForm.addToInventoryIfAccepted
+            }
         });
+
+        if (labResult.isSuccess) {
+            // 2️⃣ رفع ملف التقرير إذا وُجد
+            if (labTestFile) {
+                await uploadDocument.mutateAsync({
+                    donorId: selectedDonationInfo.donorId,
+                    documentType: 'LabReport',
+                    file: labTestFile,
+                });
+            }
+
+            // 3️⃣ تحديث DonorRequestResponses وجلب الاستجابات لتحديثها
+            const responsesResult = await donorResponsesApi.getByDonorId(selectedDonationInfo.donorId);
+            if (responsesResult.isSuccess && responsesResult.data) {
+                const confirmedResponse = responsesResult.data.find(
+                    r => r.status === ResponseStatus.Confirmed
+                );
+                if (confirmedResponse) {
+                    const newStatus = labTestForm.testResult === 'Accepted'
+                        ? ResponseStatus.Donated   // 3
+                        : ResponseStatus.Rejected; // 4
+
+                    await updateResponseStatus.mutateAsync({
+                        id: confirmedResponse.responseId,
+                        data: {
+                            status: newStatus,
+                            notes: labTestForm.testNotes || undefined,
+                            donationId: labTestForm.testResult === 'Accepted'
+                                ? selectedDonationForLabTest
+                                : undefined,
+                        }
+                    });
+
+                    // 4️⃣ إقفال الطلب عند اكتمال الوحدات (عند الموافقة فقط)
+                    if (labTestForm.testResult === 'Accepted' && confirmedResponse.requestId) {
+                        const requestResult = await bloodRequestsApi.getById(confirmedResponse.requestId);
+                        if (requestResult.isSuccess && requestResult.data) {
+                            const req = requestResult.data;
+                            const alreadyFulfilled = req.quantityFulfilled ?? 0;
+                            const totalFulfilled = alreadyFulfilled + selectedDonationInfo.quantity;
+                            const needed = req.quantityNeeded ?? 0;
+
+                            if (totalFulfilled >= needed) {
+                                await updateBloodRequestStatus.mutateAsync({
+                                    id: confirmedResponse.requestId,
+                                    status: 'Fulfilled',
+                                    notes: 'تم تلبية جميع الوحدات المطلوبة',
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        setIsLabTestDialogOpen(false);
+        setLabTestFile(null);
+        if (labTestFileInputRef.current) labTestFileInputRef.current.value = '';
+        setLabTestForm({ testResult: "Accepted", testNotes: "", addToInventoryIfAccepted: true });
+        setSelectedDonationForLabTest(null);
+        setSelectedDonationInfo(null);
     };
 
     // إعادة تعيين النموذج
@@ -167,8 +392,13 @@ const DonationsManagement = () => {
             donorId: "",
             bloodType: "",
             quantity: "1",
-            notes: ""
+            notes: "",
+            labApproved: false,
+            labNotes: "",
+            requestId: "",
         });
+        setLabFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
     // عند اختيار متبرع، تعبئة فصيلة الدم تلقائياً
@@ -189,7 +419,7 @@ const DonationsManagement = () => {
 
     const totalPages = data?.data?.totalPages || 1;
     const totalCount = data?.data?.totalCount || 0;
-    const approvedCount = approvedData?.data?.length || 0;
+    const recentCount = recentData?.data?.length || 0;
     const pendingCount = donations.filter(d => d.testResult === 'Pending').length;
 
     return (
@@ -224,6 +454,7 @@ const DonationsManagement = () => {
                                     <DialogTitle>تسجيل تبرع جديد</DialogTitle>
                                 </DialogHeader>
                                 <form onSubmit={handleAddDonation} className="space-y-4 mt-4">
+
                                     <div className="space-y-2">
                                         <Label>المتبرع *</Label>
                                         <Select
@@ -249,6 +480,47 @@ const DonationsManagement = () => {
                                                             value={(donor.donorID || donor.donorId)?.toString() || ""}
                                                         >
                                                             {donor.fullName} - {BLOOD_TYPE_MAP[donor.bloodTypeID || donor.bloodTypeId]}
+                                                        </SelectItem>
+                                                    ))
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>طلب الدم / المريض (اختياري)</Label>
+                                        <Select
+                                            value={formData.requestId}
+                                            onValueChange={(v) => {
+                                                setFormData(prev => ({ ...prev, requestId: v }));
+                                                const selectedReq = pendingRequests.find(r => r.requestId.toString() === v);
+                                                if (selectedReq) {
+                                                    // Auto-select blood type of request
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        bloodType: BLOOD_TYPE_MAP[selectedReq.bloodTypeId] || prev.bloodType
+                                                    }));
+                                                }
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="اختر طلب الدم / المريض" />
+                                            </SelectTrigger>
+                                            <SelectContent position="popper" className="max-h-[200px]">
+                                                {requestsLoading ? (
+                                                    <div className="p-2 text-center text-sm text-muted-foreground">
+                                                        جاري التحميل...
+                                                    </div>
+                                                ) : pendingRequests.length === 0 ? (
+                                                    <div className="p-2 text-center text-sm text-muted-foreground">
+                                                        لا توجد طلبات معلقة نشطة
+                                                    </div>
+                                                ) : (
+                                                    pendingRequests.map((req) => (
+                                                        <SelectItem
+                                                            key={req.requestId}
+                                                            value={req.requestId.toString()}
+                                                        >
+                                                            {req.patient?.fullName || req.patientName || 'مريض'} - فصيلة {BLOOD_TYPE_MAP[req.bloodTypeId]} (طلب #{req.requestId})
                                                         </SelectItem>
                                                     ))
                                                 )}
@@ -297,15 +569,90 @@ const DonationsManagement = () => {
                                             placeholder="أي ملاحظات إضافية..."
                                         />
                                     </div>
+
+                                    {/* ── قسم اعتماد المعمل ── */}
+                                    <div className="border-t pt-3 space-y-3">
+                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                            <input
+                                                type="checkbox"
+                                                className="w-4 h-4 rounded accent-primary cursor-pointer"
+                                                checked={formData.labApproved}
+                                                onChange={(e) => setFormData(prev => ({
+                                                    ...prev,
+                                                    labApproved: e.target.checked
+                                                }))}
+                                            />
+                                            <span className="flex items-center gap-1.5 text-sm font-medium group-hover:text-primary transition-colors">
+                                                <FlaskConical className="h-4 w-4 text-green-600" />
+                                                العينة معتمدة مخبرياً — أضف مباشرةً للمخزون
+                                            </span>
+                                        </label>
+
+                                        {formData.labApproved && (
+                                            <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                <p className="text-xs text-green-700 font-medium flex items-center gap-1">
+                                                    <Package className="h-3.5 w-3.5" />
+                                                    سيتم تسجيل الفحص ك‹سليم› وإضافة الوحدات للمخزون تلقائياً.
+                                                </p>
+                                                <div className="space-y-1.5">
+                                                    <Label className="text-xs">ملاحظات نتيجة المعمل (اختياري)</Label>
+                                                    <Input
+                                                        value={formData.labNotes}
+                                                        onChange={(e) => setFormData(prev => ({ ...prev, labNotes: e.target.value }))}
+                                                        placeholder="أي ملاحظات من التقرير المخبري..."
+                                                        className="text-sm h-8"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label className="text-xs flex items-center gap-1">
+                                                        <Upload className="h-3.5 w-3.5" />
+                                                        رفع وثيقة المعمل (اختياري)
+                                                    </Label>
+                                                    <input
+                                                        ref={fileInputRef}
+                                                        type="file"
+                                                        accept=".pdf,.jpg,.jpeg,.png"
+                                                        className="block w-full text-xs text-muted-foreground
+                                                            file:mr-3 file:py-1.5 file:px-3
+                                                            file:rounded file:border-0
+                                                            file:text-xs file:font-medium
+                                                            file:bg-primary file:text-primary-foreground
+                                                            hover:file:bg-primary/90 cursor-pointer"
+                                                        onChange={(e) => setLabFile(e.target.files?.[0] || null)}
+                                                    />
+                                                    {labFile && (
+                                                        <p className="text-xs text-green-700 flex items-center gap-1">
+                                                            <FileCheck className="h-3.5 w-3.5" />
+                                                            {labFile.name}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <div className="flex gap-3">
-                                        <Button type="submit" className="flex-1" disabled={createDonation.isPending}>
-                                            {createDonation.isPending ? (
+                                        <Button
+                                            type="submit"
+                                            className="flex-1"
+                                            disabled={createDonation.isPending || performLabTest.isPending || updateInventory.isPending || uploadDocument.isPending}
+                                        >
+                                            {(createDonation.isPending || performLabTest.isPending || updateInventory.isPending || uploadDocument.isPending) ? (
                                                 <>
                                                     <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                                                    جاري التسجيل...
+                                                    {createDonation.isPending
+                                                        ? "جاري التسجيل..."
+                                                        : performLabTest.isPending
+                                                        ? "جاري تسجيل الفحص..."
+                                                        : updateInventory.isPending
+                                                        ? "جاري تحديث المخزون..."
+                                                        : "جاري رفع الوثيقة..."}
                                                 </>
                                             ) : (
-                                                "تسجيل التبرع"
+                                                <>
+                                                    <Heart className="h-4 w-4 ml-2" />
+                                                    {formData.labApproved ? "تسجيل وإضافة للمخزون" : "تسجيل التبرع"}
+                                                </>
                                             )}
                                         </Button>
                                         <Button type="button" variant="outline" onClick={() => { setIsAddDialogOpen(false); resetForm(); }}>
@@ -335,8 +682,8 @@ const DonationsManagement = () => {
                         <CardContent className="pt-6">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm text-muted-foreground mb-1">تبرعات معتمدة</p>
-                                    <p className="text-3xl font-bold text-success">{approvedCount}</p>
+                                    <p className="text-sm text-muted-foreground mb-1">تبرعات مؤخراً (30 يوم)</p>
+                                    <p className="text-3xl font-bold text-success">{recentCount}</p>
                                 </div>
                                 <CheckCircle2 className="h-10 w-10 text-success/30" />
                             </div>
@@ -391,7 +738,7 @@ const DonationsManagement = () => {
                                     <SelectContent>
                                         <SelectItem value="all">جميع الحالات</SelectItem>
                                         <SelectItem value="Pending">قيد الفحص</SelectItem>
-                                        <SelectItem value="Approved">معتمد</SelectItem>
+                                        <SelectItem value="Accepted">مقبول</SelectItem>
                                         <SelectItem value="Rejected">مرفوض</SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -429,6 +776,7 @@ const DonationsManagement = () => {
                                             <TableHead>الكمية</TableHead>
                                             <TableHead>التاريخ</TableHead>
                                             <TableHead>نتيجة الفحص</TableHead>
+                                            <TableHead>ملاحظات الفحص</TableHead>
                                             <TableHead>الإجراءات</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -458,32 +806,42 @@ const DonationsManagement = () => {
                                                     </TableCell>
                                                     <TableCell>
                                                         <Badge variant={result.variant}>{result.label}</Badge>
+                                                        {donation.isAddedToInventory && (
+                                                            <Badge variant="outline" className="text-xs mr-2 border-green-500 text-green-600">
+                                                                بالمخزون
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {donation.testNotes ? (
+                                                            <span className="text-sm text-muted-foreground truncate max-w-[120px] block" title={donation.testNotes}>
+                                                                {donation.testNotes}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-sm text-muted-foreground">-</span>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell>
                                                         <div className="flex items-center gap-1">
                                                             {donation.testResult === 'Pending' && (
-                                                                <>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        className="text-success"
-                                                                        onClick={() => handleUpdateTestResult(donation.id, 'Approved')}
-                                                                        disabled={updateTestResult.isPending}
-                                                                    >
-                                                                        <CheckCircle2 className="h-4 w-4 ml-1" />
-                                                                        اعتماد
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        className="text-destructive"
-                                                                        onClick={() => handleUpdateTestResult(donation.id, 'Rejected')}
-                                                                        disabled={updateTestResult.isPending}
-                                                                    >
-                                                                        <XCircle className="h-4 w-4 ml-1" />
-                                                                        رفض
-                                                                    </Button>
-                                                                </>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="text-primary hover:text-primary/80"
+                                                                    onClick={() => {
+                                                                        setSelectedDonationForLabTest(donation.id);
+                                                                        setSelectedDonationInfo({
+                                                                            id: donation.id,
+                                                                            donorId: donation.donorId,
+                                                                            bloodTypeId: donation.bloodTypeId,
+                                                                            quantity: donation.quantity,
+                                                                        });
+                                                                        setIsLabTestDialogOpen(true);
+                                                                    }}
+                                                                >
+                                                                    <FlaskConical className="h-4 w-4 ml-1" />
+                                                                    إجراء فحص
+                                                                </Button>
                                                             )}
                                                             {donation.testResult !== 'Pending' && (
                                                                 <span className="text-muted-foreground text-sm">
@@ -526,6 +884,141 @@ const DonationsManagement = () => {
                         )}
                     </CardContent>
                 </Card>
+
+                <Dialog 
+                    open={isLabTestDialogOpen} 
+                    onOpenChange={(open) => {
+                        setIsLabTestDialogOpen(open);
+                        if (!open) {
+                            setLabTestFile(null);
+                            if (labTestFileInputRef.current) labTestFileInputRef.current.value = '';
+                            setSelectedDonationForLabTest(null);
+                            setSelectedDonationInfo(null);
+                            setLabTestForm({ testResult: "Accepted", testNotes: "", addToInventoryIfAccepted: true });
+                        }
+                    }}
+                >
+                    <DialogContent className="max-w-md" dir="rtl">
+                        <DialogHeader>
+                            <DialogTitle>إجراء فحص مخبري للتبرع</DialogTitle>
+                            <DialogDescription>
+                                سيتم تسجيل نتيجة الفحص وتحديث حالة وحدة الدم والمخزون بناءً عليها.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handlePerformLabTest} className="space-y-4 mt-4">
+                            <div className="space-y-2">
+                                <Label>النتيجة *</Label>
+                                <Select
+                                    value={labTestForm.testResult}
+                                    onValueChange={(v) => setLabTestForm(prev => ({ ...prev, testResult: v }))}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="اختر النتيجة" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Accepted">سليم (مقبول)</SelectItem>
+                                        <SelectItem value="Rejected">غير سليم (مرفوض)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">
+                                    {labTestForm.testResult === 'Accepted'
+                                        ? '⚠️ يتطلب رفع تقرير المختبر'
+                                        : 'لا يتطلب ملفاً مرفقاً'}
+                                </p>
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <Label>ملاحظات الفحص</Label>
+                                <Input
+                                    value={labTestForm.testNotes}
+                                    onChange={(e) => setLabTestForm(prev => ({ ...prev, testNotes: e.target.value }))}
+                                    placeholder="أي ملاحظات إضافية عن الفحص..."
+                                />
+                            </div>
+
+                            {/* قسم رفع تقرير المختبر — إلزامي عند مقبول */}
+                            {labTestForm.testResult === 'Accepted' && (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+                                    <p className="text-xs text-amber-700 font-semibold flex items-center gap-1">
+                                        <AlertCircle className="h-3.5 w-3.5" />
+                                        يجب إرفاق تقرير المختبر قبل قبول العينة
+                                    </p>
+                                    <Label className="text-xs flex items-center gap-1">
+                                        <Upload className="h-3.5 w-3.5" />
+                                        تقرير المختبر <span className="text-destructive">*</span>
+                                    </Label>
+                                    <input
+                                        ref={labTestFileInputRef}
+                                        type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                        className="block w-full text-xs text-muted-foreground
+                                            file:mr-3 file:py-1.5 file:px-3
+                                            file:rounded file:border-0
+                                            file:text-xs file:font-medium
+                                            file:bg-primary file:text-primary-foreground
+                                            hover:file:bg-primary/90 cursor-pointer"
+                                        onChange={(e) => setLabTestFile(e.target.files?.[0] || null)}
+                                    />
+                                    {labTestFile && (
+                                        <p className="text-xs text-green-700 flex items-center gap-1">
+                                            <FileCheck className="h-3.5 w-3.5" />
+                                            {labTestFile.name}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {labTestForm.testResult === "Accepted" && (
+                                <div className="flex items-center space-x-2 space-x-reverse pt-2">
+                                    <input 
+                                        type="checkbox"
+                                        id="addToInventory"
+                                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                        checked={labTestForm.addToInventoryIfAccepted}
+                                        onChange={(e) => setLabTestForm(prev => ({ ...prev, addToInventoryIfAccepted: e.target.checked }))}
+                                    />
+                                    <Label htmlFor="addToInventory" className="cursor-pointer">
+                                        إضافة للوحدات المتاحة بالمخزون
+                                    </Label>
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 pt-4">
+                                <Button 
+                                    type="submit" 
+                                    className="flex-1" 
+                                    disabled={
+                                        performLabTest.isPending ||
+                                        uploadDocument.isPending ||
+                                        updateResponseStatus.isPending ||
+                                        updateBloodRequestStatus.isPending ||
+                                        (labTestForm.testResult === 'Accepted' && !labTestFile)
+                                    }
+                                >
+                                    {performLabTest.isPending
+                                        ? 'جاري تسجيل الفحص...'
+                                        : uploadDocument.isPending
+                                        ? 'جاري رفع التقرير...'
+                                        : updateResponseStatus.isPending
+                                        ? 'جاري تحديث الاستجابة...'
+                                        : updateBloodRequestStatus.isPending
+                                        ? 'جاري تحديث الطلب...'
+                                        : 'حفظ نتيجة الفحص'}
+                                </Button>
+                                <Button type="button" variant="outline" onClick={() => { 
+                                    setIsLabTestDialogOpen(false); 
+                                    setLabTestFile(null);
+                                    if (labTestFileInputRef.current) labTestFileInputRef.current.value = '';
+                                    setSelectedDonationForLabTest(null); 
+                                    setSelectedDonationInfo(null);
+                                    setLabTestForm({ testResult: "Accepted", testNotes: "", addToInventoryIfAccepted: true });
+                                }}>
+                                    إلغاء
+                                </Button>
+                            </div>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </main>
             <Footer />
         </div>

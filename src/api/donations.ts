@@ -6,35 +6,59 @@ import type {
   Donation,
   CreateDonationRequest,
   UpdateTestResultRequest,
+  LabTestDonationDto,
 } from '@/types/api';
 
 export const donationsApi = {
   /**
    * جلب قائمة التبرعات مع التقسيم للصفحات
    */
-  getAll: async (page = 1, pageSize = 10): Promise<ServiceResponse<PagedResult<Donation>>> => {
-    return apiClient.get<PagedResult<Donation>>(`/donations?pageNumber=${page}&pageSize=${pageSize}`);
+  getAll: async (
+    page = 1,
+    pageSize = 10,
+    searchTerm?: string,
+    sortBy?: string
+  ): Promise<ServiceResponse<PagedResult<Donation>>> => {
+    let url = `/Donations?pageNumber=${page}&pageSize=${pageSize}`;
+    if (searchTerm) url += `&searchTerm=${encodeURIComponent(searchTerm)}`;
+    if (sortBy) url += `&sortBy=${encodeURIComponent(sortBy)}`;
+    return apiClient.get<PagedResult<Donation>>(url);
   },
 
   /**
    * جلب تفاصيل تبرع محدد
    */
   getById: async (id: number): Promise<ServiceResponse<Donation>> => {
-    return apiClient.get<Donation>(`/donations/${id}`);
+    return apiClient.get<Donation>(`/Donations/${id}`);
   },
 
   /**
-   * جلب التبرعات المقبولة (معتمدة للاستخدام)
+   * جلب تبرعات متبرع
    */
-  getApproved: async (): Promise<ServiceResponse<Donation[]>> => {
-    return apiClient.get<Donation[]>('/donations/approved');
+  getByDonor: async (donorId: number): Promise<ServiceResponse<Donation[]>> => {
+    return apiClient.get<Donation[]>(`/Donations/donor/${donorId}`);
+  },
+
+  /**
+   * التبرعات الأخيرة
+   */
+  getRecent: async (days?: number): Promise<ServiceResponse<Donation[]>> => {
+    const query = days ? `?days=${days}` : '';
+    return apiClient.get<Donation[]>(`/Donations/recent${query}`);
   },
 
   /**
    * تسجيل تبرع جديد
    */
   create: async (data: CreateDonationRequest): Promise<ServiceResponse<Donation>> => {
-    return apiClient.post<Donation>('/donations', data);
+    return apiClient.post<Donation>('/Donations', data);
+  },
+
+  /**
+   * إجراء فحص مخبري
+   */
+  performLabTest: async (id: number, data: LabTestDonationDto): Promise<ServiceResponse<Donation>> => {
+    return apiClient.post<Donation>(`/Donations/${id}/lab-test`, data);
   },
 
   /**
@@ -44,13 +68,13 @@ export const donationsApi = {
     id: number,
     data: UpdateTestResultRequest
   ): Promise<ServiceResponse<Donation>> => {
-    return apiClient.put<Donation>(`/donations/${id}/test-result`, data);
+    return apiClient.put<Donation>(`/Donations/${id}/test-result`, data);
   },
 
   /**
    * حذف تبرع
    */
   delete: async (id: number): Promise<ServiceResponse<boolean>> => {
-    return apiClient.delete<boolean>(`/donations/${id}`);
+    return apiClient.delete<boolean>(`/Donations/${id}`);
   },
 };
