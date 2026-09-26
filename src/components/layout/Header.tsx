@@ -41,11 +41,15 @@ const Header = () => {
   ];
 
   const staffNavigation = [
-    { name: "لوحة التحكم", href: "/staff/dashboard", icon: LayoutDashboard },
     { name: "المتبرعين", href: "/staff/donors", icon: Users },
     { name: "المرضى", href: "/staff/patients", icon: Users },
     { name: "التبرعات", href: "/staff/donations", icon: Heart },
     { name: "المخزون", href: "/staff/inventory", icon: Package },
+    { name: "التقارير", href: "/staff/reports", icon: FileText },
+  ];
+
+  const adminOnlyNavigation = [
+    { name: "إدارة المستخدمين", href: "/admin/users-management", icon: Users },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -73,7 +77,7 @@ const Header = () => {
             </div>
             <div className="flex flex-col">
               <span className="text-lg font-bold text-foreground leading-tight">
-                مستشفى غريان <span className="text-primary">المركزي</span>
+                مستشفى غريان <span className="text-primary">التعليمي</span>
               </span>
               <span className="text-xs text-muted-foreground">بنك الدم</span>
             </div>
@@ -108,9 +112,15 @@ const Header = () => {
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-56" dir="rtl">
                   <DropdownMenuLabel>صفحات الإدارة</DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to={getDashboardLink()} className="flex items-center gap-2 cursor-pointer">
+                      <LayoutDashboard className="h-4 w-4" />
+                      لوحة التحكم
+                    </Link>
+                  </DropdownMenuItem>
                   {staffNavigation.map((item) => (
                     <DropdownMenuItem key={item.href} asChild>
                       <Link to={item.href} className="flex items-center gap-2 cursor-pointer">
@@ -119,6 +129,20 @@ const Header = () => {
                       </Link>
                     </DropdownMenuItem>
                   ))}
+                  {userRole === "admin" && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">المسؤول فقط</DropdownMenuLabel>
+                      {adminOnlyNavigation.map((item) => (
+                        <DropdownMenuItem key={item.href} asChild>
+                          <Link to={item.href} className="flex items-center gap-2 cursor-pointer">
+                            <item.icon className="h-4 w-4" />
+                            {item.name}
+                          </Link>
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -218,7 +242,33 @@ const Header = () => {
                 <>
                   <div className="border-t border-border my-2" />
                   <span className="px-4 text-xs text-muted-foreground font-medium">إدارة</span>
+                  <Link
+                    to={getDashboardLink()}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                      isActive(getDashboardLink())
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    <LayoutDashboard className="h-4 w-4" />
+                    لوحة التحكم
+                  </Link>
                   {staffNavigation.map((item) => (
+                    <Link
+                      key={item.href}
+                      to={item.href}
+                      onClick={() => setIsMenuOpen(false)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${isActive(item.href)
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-secondary"
+                        }`}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {item.name}
+                    </Link>
+                  ))}
+                  {userRole === "admin" && adminOnlyNavigation.map((item) => (
                     <Link
                       key={item.href}
                       to={item.href}
