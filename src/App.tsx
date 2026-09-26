@@ -9,17 +9,16 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import StaffLogin from "./pages/StaffLogin";
 import StaffRegister from "./pages/StaffRegister";
 import BloodRequests from "./pages/BloodRequests";
 import DonorDashboard from "./pages/DonorDashboard";
 import StaffDashboard from "./pages/StaffDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
-import StaffManagement from "./pages/StaffManagement";
 import DonorsManagement from "./pages/DonorsManagement";
 import PatientsManagement from "./pages/PatientsManagement";
 import DonationsManagement from "./pages/DonationsManagement";
 import InventoryManagement from "./pages/InventoryManagement";
+import UsersManagement from "./pages/UsersManagement";
 import Contact from "./pages/Contact";
 import About from "./pages/About";
 import Profile from "./pages/Profile";
@@ -51,7 +50,6 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route path="/staff/login" element={<StaffLogin />} />
               <Route path="/staff/register" element={<StaffRegister />} />
               <Route path="/blood-requests" element={<BloodRequests />} />
               <Route
@@ -79,10 +77,10 @@ const App = () => (
                 }
               />
               <Route
-                path="/admin/staff-management"
+                path="/admin/users-management"
                 element={
                   <ProtectedRoute allowedRoles={["admin"]}>
-                    <StaffManagement />
+                    <UsersManagement />
                   </ProtectedRoute>
                 }
               />

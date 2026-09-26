@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import Header from "@/components/layout/Header";
+import NotificationBell from "@/components/notifications/NotificationBell";
 import Footer from "@/components/layout/Footer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,27 +9,43 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users,
   Building2,
   Droplet,
   Heart,
-  TrendingUp,
   Shield,
-  UserCheck,
-  UserX,
   BarChart3,
   Activity,
   RefreshCw,
   AlertCircle,
-  Package
+  Package,
+  Clock,
+  Loader2
 } from "lucide-react";
-import { useDonors } from "@/hooks/useDonors";
+
+// ─── حالات الموافقة الخمس (نفس المستخدم في صفحة إدارة المتبرعين) ───
+const APPROVAL_STATUSES = [
+  { value: 1, label: "في انتظار رفع المستندات",   color: "border-gray-400   text-gray-500   bg-gray-50"    },
+  { value: 2, label: "في انتظار الموافقة",         color: "border-yellow-500 text-yellow-600 bg-yellow-50"  },
+  { value: 3, label: "مقبول",                      color: "border-green-500  text-green-700  bg-green-50"   },
+  { value: 4, label: "مرفوض",                      color: "border-red-500    text-red-700    bg-red-50"     },
+  { value: 5, label: "مطلوب وثائق إضافية",         color: "border-orange-400 text-orange-600 bg-orange-50"  },
+] as const;
+
+const getApprovalStatus = (val: number) =>
+  APPROVAL_STATUSES.find(s => s.value === val) ??
+  { value: val, label: "غير معروف", color: "border-gray-300 text-gray-400 bg-white" };
+import { useDonors, useDonorsByStatus, useApproveDonor } from "@/hooks/useDonors";
 import { useBloodRequests, usePendingBloodRequests, useUrgentBloodRequests } from "@/hooks/useBloodRequests";
 import { useDonations } from "@/hooks/useDonations";
 import { useInventory, useLowStockInventory } from "@/hooks/useInventory";
 import { usePatients } from "@/hooks/usePatients";
-import { BLOOD_TYPE_MAP } from "@/types/api";
+import { BLOOD_TYPE_MAP, DonorApprovalStatus } from "@/types/api";
 import { mapUrgencyLevel, formatDate, mapRequestStatus } from "@/lib/utils";
 
 // Loading skeleton for stats
@@ -68,6 +86,7 @@ const ListSkeleton = ({ rows = 4 }: { rows?: number }) => (
 const AdminDashboard = () => {
   // جلب البيانات من API
   const { data: donorsData, isLoading: donorsLoading, refetch: refetchDonors } = useDonors(1, 10);
+  const { data: pendingDonorsData } = useDonorsByStatus(DonorApprovalStatus.PendingApproval, 1, 10);
   const { data: requestsData, isLoading: requestsLoading, refetch: refetchRequests } = useBloodRequests(1, 10);
   const { data: pendingData, isLoading: pendingLoading } = usePendingBloodRequests();
   const { data: urgentData } = useUrgentBloodRequests();
@@ -75,6 +94,12 @@ const AdminDashboard = () => {
   const { data: inventoryData, isLoading: inventoryLoading } = useInventory();
   const { data: lowStockData } = useLowStockInventory();
   const { data: patientsData } = usePatients(1, 10);
+  const approveDonor = useApproveDonor();
+
+  // حالة dialog تغيير الحالة (للحالات 4 و 5 التي تحتاج ملاحظة)
+  const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState<{ donorId: number; newStatus: number } | null>(null);
+  const [statusNote, setStatusNote] = useState("");
 
   // الإحصائيات
   const stats = {
@@ -84,18 +109,58 @@ const AdminDashboard = () => {
     totalDonations: donationsData?.data?.totalCount || 0,
     activeRequests: pendingData?.data?.length || 0,
     lowStockItems: lowStockData?.data?.length || 0,
+    pendingDonorsCount: pendingDonorsData?.data?.totalCount || 0,
   };
 
-  // تحويل بيانات المتبرعين
-  const recentDonors = donorsData?.data?.items?.slice(0, 5).map(donor => ({
-    id: donor.donorId,
-    name: donor.fullName,
-    type: "متبرع",
-    bloodType: BLOOD_TYPE_MAP[donor.bloodTypeId],
-    city: donor.city,
-    status: donor.isActive ? "active" : "pending",
-    joinDate: formatDate(donor.createdAt || new Date().toISOString())
-  })) || [];
+  // معالجة تغيير حالة المتبرع عبر الكومبو بوكس
+  const handleStatusChange = (donorId: number, newStatus: number) => {
+    if (newStatus === 4 || newStatus === 5) {
+      setPendingStatusChange({ donorId, newStatus });
+      setStatusNote("");
+      setIsNoteDialogOpen(true);
+    } else {
+      approveDonor.mutate({ id: donorId, data: { newStatus } });
+    }
+  };
+
+  const submitStatusWithNote = async () => {
+    if (!pendingStatusChange) return;
+    await approveDonor.mutateAsync({
+      id: pendingStatusChange.donorId,
+      data: {
+        newStatus: pendingStatusChange.newStatus,
+        rejectionReason: statusNote || undefined,
+      }
+    });
+    setIsNoteDialogOpen(false);
+    setPendingStatusChange(null);
+    setStatusNote("");
+  };
+
+  // تحويل بيانات المتبرعين — قراءة donorID (PascalCase من API) + approvalStatus
+  // عرض آخر المتبرعين المسجلين أولاً (ترتيب تنازلي حسب المعرّف)
+  const sortedDonorsRaw = donorsData?.data?.items ? [...donorsData.data.items].sort((a: any, b: any) => {
+    const idA = a.donorID ?? a.donorId ?? 0;
+    const idB = b.donorID ?? b.donorId ?? 0;
+    return idB - idA;
+  }) : [];
+
+  const recentDonors = sortedDonorsRaw.slice(0, 5).map(donor => {
+    const donorAny = donor as any;
+    const donorId = donorAny.donorID ?? donorAny.donorId ?? donor.donorId ?? 0;
+    const bloodTypeId = donorAny.bloodTypeID ?? donorAny.bloodTypeId ?? donor.bloodTypeId;
+    const approvalStatus = donorAny.approvalStatus ?? 1;
+    return {
+      id: donorId,
+      name: donor.fullName,
+      type: "متبرع",
+      bloodType: BLOOD_TYPE_MAP[bloodTypeId] || '-',
+      city: donor.city || '-',
+      // حالة الموافقة: 0=pending, 1=approved, 2=rejected
+      approvalStatus,
+      joinDate: formatDate(donor.createdAt || new Date().toISOString())
+    };
+  }) || [];
 
   // تحويل بيانات الطلبات
   const recentRequests = requestsData?.data?.items?.slice(0, 5).map(req => {
@@ -110,7 +175,7 @@ const AdminDashboard = () => {
     const rawStatus = req.status || rawReq.requestStatus || 'Pending';
     return {
       id: req.requestId,
-      hospital: 'مستشفى غريان المركزي',
+      hospital: 'مستشفى غريان التعليمي',
       bloodType,
       urgency: mapUrgencyLevel(req.urgencyLevel),
       status: rawStatus === 'Pending' ? 'open' : 'completed',
@@ -121,7 +186,7 @@ const AdminDashboard = () => {
   }) || [];
 
   const urgencyConfig = {
-    critical: { label: "حرج", variant: "destructive" as const, className: "border-red-500 text-red-700 bg-red-50" },
+    critical: { label: "طارئ", variant: "destructive" as const, className: "border-red-500 text-red-700 bg-red-50" },
     urgent: { label: "عاجل", variant: "outline" as const, className: "border-orange-500 text-orange-600 bg-orange-50" },
     normal: { label: "عادي", variant: "secondary" as const, className: "" },
   };
@@ -155,15 +220,16 @@ const AdminDashboard = () => {
                 لوحة تحكم المدير
               </h1>
               <p className="text-muted-foreground">
-                إدارة شاملة للنظام - مستشفى غريان المركزي
+                إدارة شاملة للنظام - مستشفى غريان التعليمي
               </p>
             </div>
           </div>
-          <div className="flex gap-2 mt-4 md:mt-0">
+          <div className="flex gap-2 mt-4 md:mt-0 items-center">
+            <NotificationBell />
             <Button variant="outline" size="sm" asChild>
-              <Link to="/admin/staff-management">
+              <Link to="/admin/users-management">
                 <Users className="h-4 w-4 ml-2" />
-                إدارة الموظفين
+                إدارة المستخدمين والأدوار
               </Link>
             </Button>
           </div>
@@ -251,6 +317,16 @@ const AdminDashboard = () => {
                 </div>
               </CardContent>
             </Card>
+
+            <Card variant="stat">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-center">
+                  <Clock className="h-8 w-8 text-warning mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-warning">{stats.pendingDonorsCount}</p>
+                  <p className="text-xs text-muted-foreground">بانتظار الموافقة</p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -273,13 +349,13 @@ const AdminDashboard = () => {
 
           <TabsContent value="users">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between text-right" dir="rtl">
                 <div>
                   <CardTitle>أحدث المتبرعين</CardTitle>
                   <CardDescription>إدارة حسابات المتبرعين المسجلين</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => refetchDonors()}>
-                  <RefreshCw className="h-4 w-4 ml-2" />
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => refetchDonors()}>
+                  <RefreshCw className="h-4 w-4" />
                   تحديث
                 </Button>
               </CardHeader>
@@ -292,44 +368,50 @@ const AdminDashboard = () => {
                     <p className="text-lg font-medium">لا يوجد متبرعين</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {recentDonors.map((user) => (
+                  <div className="space-y-4" dir="rtl">
+                    {recentDonors.map((donor) => (
                       <div
-                        key={user.id}
-                        className="flex items-center justify-between p-4 rounded-lg bg-secondary/50"
+                        key={donor.id}
+                        className="flex items-center justify-between p-4 rounded-lg bg-secondary/50 gap-3"
                       >
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                             <Users className="h-5 w-5 text-primary" />
                           </div>
-                          <div>
-                            <p className="font-semibold text-foreground">{user.name}</p>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Badge variant="outline">{user.type}</Badge>
-                              {user.bloodType && <Badge variant="secondary">{user.bloodType}</Badge>}
-                              <span>{user.city}</span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-foreground truncate">{donor.name}</p>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                              <Badge variant="outline">{donor.type}</Badge>
+                              {donor.bloodType && <Badge variant="secondary">{donor.bloodType}</Badge>}
+                              <span>{donor.city}</span>
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Badge variant={user.status === "active" ? "default" : "secondary"}>
-                            {user.status === "active" ? "مفعّل" : "بانتظار التفعيل"}
+                        {/* ── كومبو بوكس تغيير حالة الموافقة ── */}
+                        <div className="flex flex-col gap-1.5 flex-shrink-0">
+                          <Badge
+                            variant="outline"
+                            className={`w-fit text-xs ${getApprovalStatus(donor.approvalStatus).color}`}
+                          >
+                            {getApprovalStatus(donor.approvalStatus).label}
                           </Badge>
-                          {user.status === "pending" && (
-                            <>
-                              <Button size="sm" variant="default">
-                                <UserCheck className="h-4 w-4 ml-1" />
-                                تفعيل
-                              </Button>
-                              <Button size="sm" variant="outline">
-                                <UserX className="h-4 w-4 ml-1" />
-                                رفض
-                              </Button>
-                            </>
-                          )}
-                          <Button size="sm" variant="ghost">
-                            عرض
-                          </Button>
+                          <Select
+                            dir="rtl"
+                            value={donor.approvalStatus?.toString()}
+                            onValueChange={(v) => handleStatusChange(donor.id, parseInt(v))}
+                            disabled={approveDonor.isPending}
+                          >
+                            <SelectTrigger className="h-7 text-xs w-44">
+                              <SelectValue placeholder="تغيير الحالة" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {APPROVAL_STATUSES.map(s => (
+                                <SelectItem key={s.value} value={s.value.toString()} className="text-xs">
+                                  {s.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     ))}
@@ -346,13 +428,13 @@ const AdminDashboard = () => {
 
           <TabsContent value="requests">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between text-right" dir="rtl">
                 <div>
                   <CardTitle>طلبات الدم الأخيرة</CardTitle>
                   <CardDescription>جميع طلبات الدم في النظام ({requestsData?.data?.totalCount || 0} طلب)</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => refetchRequests()}>
-                  <RefreshCw className="h-4 w-4 ml-2" />
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => refetchRequests()}>
+                  <RefreshCw className="h-4 w-4" />
                   تحديث
                 </Button>
               </CardHeader>
@@ -482,10 +564,19 @@ const AdminDashboard = () => {
                         {urgentData?.data?.length || 0}
                       </span>
                     </div>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+                      <span className="text-muted-foreground">متبرعون بانتظار الموافقة</span>
+                      <span className={`font-bold text-lg ${stats.pendingDonorsCount > 0 ? 'text-warning' : 'text-success'}`}>
+                        {stats.pendingDonorsCount}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-4">
-                    <Button variant="outline" className="w-full" asChild>
+                  <div className="mt-4 flex gap-2 flex-col sm:flex-row">
+                    <Button variant="outline" className="flex-1" asChild>
                       <Link to="/staff/inventory">إدارة المخزون</Link>
+                    </Button>
+                    <Button variant="outline" className="flex-1" asChild>
+                      <Link to="/staff/donors">مراجعة المتبرعين</Link>
                     </Button>
                   </div>
                 </CardContent>
@@ -494,6 +585,57 @@ const AdminDashboard = () => {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Note Dialog — يظهر عند اختيار "مرفوض" أو "مطلوب وثائق إضافية" */}
+      <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>
+              {pendingStatusChange?.newStatus === 4 ? "رفض المتبرع" : "طلب وثائق إضافية"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>
+                {pendingStatusChange?.newStatus === 4 ? "سبب الرفض *" : "ملاحظة للمتبرع (اختياري)"}
+              </Label>
+              <Input
+                placeholder={
+                  pendingStatusChange?.newStatus === 4
+                    ? "أدخل سبب رفض المتبرع..."
+                    : "حدد الوثائق المطلوبة..."
+                }
+                value={statusNote}
+                onChange={(e) => setStatusNote(e.target.value)}
+                required={pendingStatusChange?.newStatus === 4}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => { setIsNoteDialogOpen(false); setPendingStatusChange(null); }}
+              >
+                إلغاء
+              </Button>
+              <Button
+                variant={pendingStatusChange?.newStatus === 4 ? "destructive" : "default"}
+                onClick={submitStatusWithNote}
+                disabled={
+                  (pendingStatusChange?.newStatus === 4 && !statusNote.trim()) ||
+                  approveDonor.isPending
+                }
+              >
+                {approveDonor.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "تأكيد"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Footer />
     </div>
   );
