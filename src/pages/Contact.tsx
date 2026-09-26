@@ -34,13 +34,13 @@ const Contact = () => {
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-4">
             <Building2 className="h-4 w-4" />
-            <span>مستشفى غريان المركزي</span>
+            <span>مستشفى غريان التعليمي</span>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
             تواصل <span className="text-primary">معنا</span>
           </h1>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            بنك الدم في مستشفى غريان المركزي - نحن هنا لخدمتك على مدار الساعة
+            بنك الدم في مستشفى غريان التعليمي - نحن هنا لخدمتك على مدار الساعة
           </p>
         </div>
 
@@ -86,7 +86,7 @@ const Contact = () => {
                   <div>
                     <h3 className="font-bold text-foreground mb-1">العنوان</h3>
                     <p className="text-muted-foreground text-sm mb-2">موقع المستشفى</p>
-                    <p className="font-medium text-foreground">مستشفى غريان المركزي، غريان، ليبيا</p>
+                    <p className="font-medium text-foreground">مستشفى غريان التعليمي، غريان، ليبيا</p>
                   </div>
                 </div>
               </CardContent>

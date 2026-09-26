@@ -73,7 +73,7 @@ export const donorResponsesApi = {
   create: async (data: CreateDonorResponseRequest): Promise<ServiceResponse<DonorResponse>> => {
     const response = await apiClient.post<ApiDonorResponse>('/donorresponses', data);
     
-    if (response.success && response.data) {
+    if (response.isSuccess && response.data) {
       return {
         ...response,
         data: transformApiDonorResponse(response.data)
@@ -81,7 +81,7 @@ export const donorResponsesApi = {
     }
     
     return {
-      success: response.success,
+      success: response.isSuccess,
       message: response.message,
       data: null,
       errors: response.errors
@@ -103,7 +103,7 @@ export const donorResponsesApi = {
   getById: async (id: number): Promise<ServiceResponse<DonorResponse>> => {
     const response = await apiClient.get<ApiDonorResponse>(`/donorresponses/${id}`);
     
-    if (response.success && response.data) {
+    if (response.isSuccess && response.data) {
       return {
         ...response,
         data: transformApiDonorResponse(response.data)
@@ -111,7 +111,7 @@ export const donorResponsesApi = {
     }
     
     return {
-      success: response.success,
+      success: response.isSuccess,
       message: response.message,
       data: null,
       errors: response.errors
@@ -133,7 +133,7 @@ export const donorResponsesApi = {
   getByRequestId: async (requestId: number): Promise<ServiceResponse<DonorResponse[]>> => {
     const response = await apiClient.get<ApiDonorResponse[]>(`/donorresponses/request/${requestId}`);
     
-    if (response.success && response.data) {
+    if (response.isSuccess && response.data) {
       return {
         ...response,
         data: response.data.map(transformApiDonorResponse)
@@ -141,7 +141,7 @@ export const donorResponsesApi = {
     }
     
     return {
-      success: response.success,
+      success: response.isSuccess,
       message: response.message,
       data: null,
       errors: response.errors
@@ -163,7 +163,7 @@ export const donorResponsesApi = {
   getByDonorId: async (donorId: number): Promise<ServiceResponse<DonorResponse[]>> => {
     const response = await apiClient.get<ApiDonorResponse[]>(`/donorresponses/donor/${donorId}`);
     
-    if (response.success && response.data) {
+    if (response.isSuccess && response.data) {
       return {
         ...response,
         data: response.data.map(transformApiDonorResponse)
@@ -171,7 +171,7 @@ export const donorResponsesApi = {
     }
     
     return {
-      success: response.success,
+      success: response.isSuccess,
       message: response.message,
       data: null,
       errors: response.errors
@@ -198,9 +198,16 @@ export const donorResponsesApi = {
     id: number,
     data: UpdateResponseStatusRequest
   ): Promise<ServiceResponse<DonorResponse>> => {
-    const response = await apiClient.put<ApiDonorResponse>(`/donorresponses/${id}/status`, data);
+    const apiData: any = {
+      status: data.status,
+      notes: data.notes
+    };
+    if (data.donationId !== undefined) {
+      apiData.donationID = data.donationId;
+    }
+    const response = await apiClient.put<ApiDonorResponse>(`/donorresponses/${id}/status`, apiData);
     
-    if (response.success && response.data) {
+    if (response.isSuccess && response.data) {
       return {
         ...response,
         data: transformApiDonorResponse(response.data)
@@ -208,7 +215,7 @@ export const donorResponsesApi = {
     }
     
     return {
-      success: response.success,
+      success: response.isSuccess,
       message: response.message,
       data: null,
       errors: response.errors

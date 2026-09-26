@@ -31,6 +31,8 @@ import { usePatients, useCreatePatient, useUpdatePatient, useDeletePatient, useP
 import { BLOOD_TYPE_MAP, BLOOD_TYPE_REVERSE_MAP } from "@/types/api";
 import { formatDate, mapGender } from "@/lib/utils";
 import type { Gender, CreatePatientRequest, UpdatePatientRequest } from "@/types/api";
+import { useToast } from "@/hooks/use-toast";
+import { patientsApi } from "@/api/patients";
 
 const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
@@ -44,6 +46,7 @@ const TableSkeleton = ({ rows = 5 }: { rows?: number }) => (
 );
 
 const PatientsManagement = () => {
+    const { toast } = useToast();
     const [page, setPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterBloodType, setFilterBloodType] = useState("all");
@@ -72,13 +75,15 @@ const PatientsManagement = () => {
     const patients = data?.data?.items?.map(patient => {
         // Handle different possible field names from API
         const patientAny = patient as any;
+        // API يُرجع patientID (PascalCase) وليس patientId (camelCase)
+        const patientId = patientAny.patientID ?? patientAny.PatientID ?? patient.patientId ?? patientAny.id ?? 0;
         const bloodTypeId = patient.bloodTypeId ?? patientAny.BloodTypeID ?? patientAny.bloodTypeID;
         const bloodTypeName = patient.bloodType?.typeName ?? patientAny.bloodType?.TypeName ?? patientAny.BloodType?.typeName ?? patientAny.BloodType?.TypeName;
 
         return {
-            id: patient.patientId,
+            id: patientId,
             name: patient.fullName,
-            nationalId: patient.nationalId,
+            nationalId: patient.nationalId ?? patientAny.nationalID ?? patientAny.NationalID,
             bloodType: bloodTypeName || BLOOD_TYPE_MAP[bloodTypeId] || 'غير محدد',
             bloodTypeId: bloodTypeId,
             phone: patient.phone,
@@ -91,9 +96,9 @@ const PatientsManagement = () => {
 
     // تصفية البيانات
     const filteredPatients = patients.filter(patient => {
-        const matchesSearch = patient.name.includes(searchTerm) ||
-            patient.phone.includes(searchTerm) ||
-            patient.nationalId.includes(searchTerm);
+        const matchesSearch = (patient.name ?? '').includes(searchTerm) ||
+            (patient.phone ?? '').includes(searchTerm) ||
+            (patient.nationalId ?? '').includes(searchTerm);
         const matchesBloodType = filterBloodType === "all" || patient.bloodType === filterBloodType;
         return matchesSearch && matchesBloodType;
     });
@@ -106,19 +111,92 @@ const PatientsManagement = () => {
             return;
         }
 
+        if (formData.nationalId.length !== 12) {
+            toast({
+                title: "خطأ في التحقق",
+                description: "الرقم الوطني يجب أن يتكون من 12 خانة بالضبط",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        const firstDigit = formData.nationalId[0];
+        if (firstDigit !== "1" && firstDigit !== "2") {
+            toast({
+                title: "خطأ في التحقق",
+                description: "الرقم الوطني يجب أن يبدأ بالرقم 1 (للذكور) أو 2 (للإناث)",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (formData.gender === "Male" && firstDigit !== "1") {
+            toast({
+                title: "خطأ في التحقق",
+                description: "تضارب في البيانات: الرقم الوطني يبدأ بـ 2 (أنثى) ولكن الجنس المختار هو ذكر",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (formData.gender === "Female" && firstDigit !== "2") {
+            toast({
+                title: "خطأ في التحقق",
+                description: "تضارب في البيانات: الرقم الوطني يبدأ بـ 1 (ذكر) ولكن الجنس المختار هو أنثى",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (formData.dateOfBirth) {
+            const nationalIdYear = formData.nationalId.substring(1, 5);
+            const dobYear = formData.dateOfBirth.split("-")[0];
+            if (nationalIdYear !== dobYear) {
+                toast({
+                    title: "خطأ في التحقق",
+                    description: `تضارب في البيانات: سنة الميلاد في الرقم الوطني (${nationalIdYear}) لا تطابق سنة الميلاد في تاريخ الميلاد المحدد (${dobYear})`,
+                    variant: "destructive",
+                });
+                return;
+            }
+        }
+
+        try {
+            // التحقق من أن الرقم الوطني غير مسجل مسبقاً لدى مريض آخر
+            const nationalIdCheck = await patientsApi.getByNationalId(formData.nationalId);
+            if (nationalIdCheck.isSuccess && nationalIdCheck.data) {
+                toast({
+                    title: "رقم وطني مكرر",
+                    description: "الرقم الوطني مسجل مسبقاً لدى مريض آخر",
+                    variant: "destructive",
+                });
+                return;
+            }
+        } catch (checkError) {
+            console.error("خطأ أثناء التحقق من الرقم الوطني:", checkError);
+        }
+
         const newPatient: CreatePatientRequest = {
             fullName: formData.fullName,
             nationalID: formData.nationalId,
-            gender: formData.gender === 'Male' ? 0 : 1, // 0=Male, 1=Female
+            gender: formData.gender === 'Male' ? 1 : 2, // 1=Male, 2=Female
             dateOfBirth: formData.dateOfBirth,
             phone: formData.phone,
             bloodTypeID: BLOOD_TYPE_REVERSE_MAP[formData.bloodType],
             city: formData.city
         };
 
-        await createPatient.mutateAsync(newPatient);
-        setIsAddDialogOpen(false);
-        resetForm();
+        try {
+            await createPatient.mutateAsync(newPatient);
+            setIsAddDialogOpen(false);
+            resetForm();
+            toast({
+                title: "تمت الإضافة بنجاح",
+                description: "تم إضافة المريض بنجاح",
+            });
+        } catch {
+            // Error is handled in useCreatePatient's onError handler
+        }
     };
 
     // معالجة تعديل مريض
@@ -224,7 +302,12 @@ const PatientsManagement = () => {
                                             <Label>الرقم الوطني *</Label>
                                             <Input
                                                 value={formData.nationalId}
-                                                onChange={(e) => setFormData(prev => ({ ...prev, nationalId: e.target.value }))}
+                                                onChange={(e) => {
+                                                    const sanitized = e.target.value.replace(/\D/g, "");
+                                                    if (sanitized.length <= 12) {
+                                                        setFormData(prev => ({ ...prev, nationalId: sanitized }));
+                                                    }
+                                                }}
                                                 placeholder="أدخل الرقم الوطني"
                                                 required
                                             />

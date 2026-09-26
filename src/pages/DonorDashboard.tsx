@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
+import NotificationBell from "@/components/notifications/NotificationBell";
 import Footer from "@/components/layout/Footer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,55 +21,98 @@ import {
   Calendar,
   Building2,
   AlertCircle,
-  XCircle
+  XCircle,
+  FileText
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUrgentBloodRequests } from "@/hooks/useBloodRequests";
-import { useDonors } from "@/hooks/useDonors";
-import { useDonations } from "@/hooks/useDonations";
+import { useDonor, useDonorByUserId } from "@/hooks/useDonors";
+import { useDonorDonations } from "@/hooks/useDonations";
+import { useDonorDocuments } from "@/hooks/useMedicalDocuments";
+import { useDonorResponses, useCancelDonorResponse } from "@/hooks/useDonorResponses";
+import { ResponseStatus, ResponseStatusLabels, ResponseStatusVariant } from "@/types/donor-response";
+import { MedicalDocumentsDialog } from "@/components/donors/MedicalDocumentsDialog";
 import { formatDate, mapUrgencyLevel } from "@/lib/utils";
 import { BLOOD_TYPE_MAP } from "@/types/api";
+import { canDonateToPatient } from "@/lib/bloodCompatibility";
 import type { ApiUser, BloodRequest } from "@/types/api";
+import { X } from "lucide-react";
 
 const DonorDashboard = () => {
   const { user } = useAuth();
   const apiUser = user as ApiUser | null;
+  const [isDocsDialogOpen, setIsDocsDialogOpen] = useState(false);
 
   // جلب الطلبات العاجلة
   const { data: urgentRequestsData, isLoading: requestsLoading } = useUrgentBloodRequests();
 
-  // جلب بيانات المتبرع (نحتاج للبحث بناءً على المستخدم الحالي)
-  const { data: donorsData, isLoading: donorsLoading } = useDonors(1, 100);
+  // جلب بيانات المتبرع عبر userId مباشرة
+  const { data: donorByUserData, isLoading: donorByUserLoading } = useDonorByUserId(apiUser?.id || "");
+  const rawDonor = donorByUserData?.data as any;
+  // الـ API يُعيد donorID بحرف كبير — نتعامل مع جميع الاحتمالات
+  const donorId: number | undefined =
+    rawDonor?.donorID || rawDonor?.donorId || rawDonor?.DonorID || undefined;
 
-  // جلب التبرعات
-  const { data: donationsData, isLoading: donationsLoading } = useDonations(1, 10);
+  // بيانات المتبرع الحالية
+  const currentDonor = donorByUserData?.data;
 
-  // البحث عن المتبرع الحالي من قائمة المتبرعين
-  const currentDonor = donorsData?.data?.items?.find(
-    (donor) => donor.fullName === apiUser?.fullName || donor.phone === apiUser?.phone
-  );
+  // جلب الوثائق الطبية
+  const { data: documentsData, isLoading: documentsLoading } = useDonorDocuments(donorId ?? 0);
+  const documents = documentsData?.data || [];
+
+  // جلب التبرعات الخاصة بالمتبرع الحالي
+  const { data: donationsData, isLoading: donationsLoading } = useDonorDonations(donorId ?? 0);
+
+  // جلب الاستجابات
+  const { data: responsesData, isLoading: responsesLoading } = useDonorResponses({ donorId: donorId ?? 0 });
+  const myResponses = responsesData || [];
+  const cancelResponse = useCancelDonorResponse();
+
+  const handleCancelResponse = async (responseId: number) => {
+    if (window.confirm("هل أنت متأكد من رغبتك في إلغاء استجابتك لهذا الطلب؟")) {
+      try {
+        const result = await cancelResponse.mutateAsync({ id: responseId, reason: "تم الإلغاء من قبل المتبرع عبر لوحة التحكم" });
+        if (result.success) {
+          alert("تم إلغاء الاستجابة بنجاح");
+        } else {
+          alert(result.message || "فشل في إلغاء الاستجابة");
+        }
+      } catch (err: any) {
+        alert(err?.message || "حدث خطأ أثناء إلغاء الاستجابة");
+      }
+    }
+  };
 
   // دالة تحويل testResult من رقم إلى نص
   const normalizeTestResult = (result: string | number | undefined | null): string => {
-    const numericMap: Record<number, string> = { 0: 'Pending', 1: 'Approved', 2: 'Rejected' };
+    const numericMap: Record<number, string> = { 1: 'Pending', 2: 'Accepted', 3: 'Rejected' };
     if (result === null || result === undefined) return 'Pending';
     if (typeof result === 'number') return numericMap[result] || 'Pending';
+    if (result === 'Approved') return 'Accepted';
     return result;
   };
 
   // تبرعات المتبرع الحالي
-  const myDonations = (donationsData?.data?.items || [])
-    .filter((donation) => donation.donorId === currentDonor?.donorId)
+  const myDonations = (donationsData?.data || [])
     .map(d => ({ ...d, testResult: normalizeTestResult(d.testResult) }));
 
   // حساب الإحصائيات
   const totalDonations = myDonations.length;
-  const approvedDonations = myDonations.filter(d => d.testResult === 'Approved').length;
+  const approvedDonations = myDonations.filter(d => d.testResult === 'Accepted').length;
   const livesImpacted = approvedDonations * 3; // تقريباً كل تبرع ينقذ 3 أرواح
 
   // فصيلة دم المتبرع
-  const donorBloodType = currentDonor?.bloodType?.typeName ||
-    BLOOD_TYPE_MAP[currentDonor?.bloodTypeId || 1] || "غير محدد";
+  const donorBloodTypeId =
+    currentDonor?.bloodTypeId ||
+    (currentDonor as any)?.bloodTypeID ||
+    (currentDonor as any)?.BloodTypeID ||
+    undefined;
+
+  const donorBloodType =
+    (typeof currentDonor?.bloodType === 'string' ? currentDonor.bloodType : currentDonor?.bloodType?.typeName) ||
+    (currentDonor as any)?.bloodTypeName ||
+    (donorBloodTypeId ? BLOOD_TYPE_MAP[donorBloodTypeId] : undefined) ||
+    "غير محدد";
 
   // آخر تبرع
   const lastDonation = myDonations.length > 0
@@ -78,26 +123,30 @@ const DonorDashboard = () => {
   const urgentRequests = (urgentRequestsData?.data as BloodRequest[]) || [];
 
   const matchingRequests = urgentRequests.filter((request) => {
-    if (!currentDonor?.bloodTypeId) return true; // عرض الكل إذا لم نعرف الفصيلة
+    if (!donorBloodTypeId) return true; // عرض الكل إذا لم نعرف الفصيلة
 
-    // استخدام منطق التوافق الصحيح
-    // المتبرع يمكنه التبرع للمريض إذا كانت فصيلته متوافقة
-    const compatibility: { [key: number]: number[] } = {
-      1: [1, 2, 3, 4, 5, 6, 7, 8], // O- يعطي الجميع
-      2: [2, 4, 6, 8],              // O+ يعطي الإيجابية
-      3: [3, 4, 7, 8],              // A- يعطي A و AB
-      4: [4, 8],                    // A+ يعطي A+ و AB+
-      5: [5, 6, 7, 8],              // B- يعطي B و AB
-      6: [6, 8],                    // B+ يعطي B+ و AB+
-      7: [7, 8],                    // AB- يعطي AB فقط
-      8: [8],                       // AB+ يعطي AB+ فقط
-    };
-
-    const canDonate = compatibility[currentDonor.bloodTypeId]?.includes(request.bloodTypeId);
-    return canDonate || false;
+    const requestBloodTypeId = request.bloodTypeId || (request as any).bloodTypeID || (request as any).BloodTypeID;
+    return canDonateToPatient(donorBloodTypeId, requestBloodTypeId);
   }).slice(0, 3);
 
-  const isLoading = requestsLoading || donorsLoading || donationsLoading;
+  const isLoading = requestsLoading || donorByUserLoading || donationsLoading || responsesLoading;
+
+  const getApprovalStatusBadge = (status?: number) => {
+    switch (status) {
+      case 1:
+        return <Badge variant="outline" className="ml-2 border-gray-400 text-gray-500 bg-gray-50">في انتظار رفع المستندات</Badge>;
+      case 2:
+        return <Badge variant="outline" className="ml-2 border-yellow-500 text-yellow-600 bg-yellow-50">في انتظار الموافقة</Badge>;
+      case 3:
+        return <Badge variant="outline" className="ml-2 border-green-500 text-green-700 bg-green-50">مقبول</Badge>;
+      case 4:
+        return <Badge variant="outline" className="ml-2 border-red-500 text-red-700 bg-red-50">مرفوض</Badge>;
+      case 5:
+        return <Badge variant="outline" className="ml-2 border-orange-400 text-orange-600 bg-orange-50">مطلوب وثائق إضافية</Badge>;
+      default:
+        return <Badge variant="outline" className="ml-2 border-gray-300 text-gray-400 bg-white">غير معروف</Badge>;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-secondary/30" dir="rtl">
@@ -108,20 +157,18 @@ const DonorDashboard = () => {
           <div>
             <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium mb-2">
               <Building2 className="h-3 w-3" />
-              <span>مستشفى غريان المركزي</span>
+              <span>مستشفى غريان التعليمي</span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2 flex items-center">
               مرحباً، {apiUser?.fullName || "متبرع"}
+              {currentDonor && getApprovalStatusBadge(currentDonor.approvalStatus)}
             </h1>
             <p className="text-muted-foreground">
               شكراً لك على مساهمتك في إنقاذ الأرواح
             </p>
           </div>
           <div className="flex items-center gap-3 mt-4 md:mt-0">
-            <Button variant="outline" size="sm">
-              <Bell className="h-4 w-4 ml-2" />
-              الإشعارات
-            </Button>
+            <NotificationBell />
             <Button variant="ghost" size="sm" asChild>
               <Link to="/profile">
                 <Settings className="h-4 w-4 ml-2" />
@@ -202,7 +249,8 @@ const DonorDashboard = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Matching Requests */}
-          <div className="lg:col-span-2">
+          {/* Matching Requests & My Responses */}
+          <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
@@ -252,7 +300,7 @@ const DonorDashboard = () => {
                               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                 <span className="flex items-center gap-1">
                                   <MapPin className="h-3 w-3" />
-                                  مستشفى غريان المركزي
+                                  مستشفى غريان التعليمي
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
@@ -271,6 +319,92 @@ const DonorDashboard = () => {
                             <Button size="sm" asChild>
                               <Link to="/blood-requests">استجب</Link>
                             </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* My Responses Card */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bell className="h-5 w-5 text-primary" />
+                    استجاباتي للطلبات
+                  </CardTitle>
+                  <CardDescription>
+                    طلبات الدم التي أبديت اهتمامك بها وحالة كل منها
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {responsesLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2].map((i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : myResponses.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Heart className="h-12 w-12 mx-auto mb-3 opacity-30 text-primary" />
+                    <p>لم تستجب لأي طلبات بعد</p>
+                    <p className="text-sm">عندما تستجيب لطلب دم، ستظهر حالته هنا</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {myResponses.map((response) => {
+                      const dateString = response.responseDate || response.createdAt;
+                      return (
+                        <div
+                          key={response.responseId}
+                          className="flex items-center justify-between p-4 rounded-lg bg-secondary/30 border border-gray-100 hover:bg-secondary/40 transition-colors"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="relative">
+                              <Droplet className="h-10 w-10 text-primary fill-primary" />
+                              <span className="absolute inset-0 flex items-center justify-center text-primary-foreground font-bold text-xs">
+                                {response.bloodTypeName}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="font-semibold text-foreground">
+                                {response.patientName ? `تبرع للمريض: ${response.patientName}` : `استجابة للطلب #${response.requestId}`}
+                              </p>
+                              <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  {formatDate(dateString)}
+                                </span>
+                                {response.notes && (
+                                  <span className="truncate max-w-[200px]" title={response.notes}>
+                                    ملاحظة: {response.notes}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <Badge variant={ResponseStatusVariant[response.status] || 'default'}>
+                              {ResponseStatusLabels[response.status] || 'غير معروف'}
+                            </Badge>
+
+                            {response.status === ResponseStatus.Interested && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0"
+                                onClick={() => handleCancelResponse(response.responseId)}
+                                title="إلغاء الاستجابة"
+                                disabled={cancelResponse.isPending}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       );
@@ -307,7 +441,7 @@ const DonorDashboard = () => {
                   <div className="space-y-4">
                     {myDonations.slice(0, 5).map((donation) => (
                       <div key={donation.donationId} className="flex items-start gap-3 pb-4 border-b border-border last:border-0">
-                        {donation.testResult === 'Approved' ? (
+                        {donation.testResult === 'Accepted' ? (
                           <CheckCircle2 className="h-5 w-5 text-success mt-0.5" />
                         ) : donation.testResult === 'Rejected' ? (
                           <XCircle className="h-5 w-5 text-destructive mt-0.5" />
@@ -323,10 +457,10 @@ const DonorDashboard = () => {
                               {formatDate(donation.donationDate)}
                             </p>
                             <Badge variant={
-                              donation.testResult === 'Approved' ? 'default' :
+                              donation.testResult === 'Accepted' ? 'default' :
                                 donation.testResult === 'Rejected' ? 'destructive' : 'secondary'
                             } className="text-xs">
-                              {donation.testResult === 'Approved' ? 'معتمد' :
+                              {donation.testResult === 'Accepted' ? 'مقبول' :
                                 donation.testResult === 'Rejected' ? 'مرفوض' : 'قيد الفحص'}
                             </Badge>
                           </div>
@@ -340,6 +474,70 @@ const DonorDashboard = () => {
                     عرض طلبات الدم
                   </Link>
                 </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Medical Documents */}
+          <div className="lg:col-span-1">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  وثائقي الطبية
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {documentsLoading ? (
+                  <div className="space-y-4">
+                    {[1, 2].map((i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : documents.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">لا توجد وثائق طبية مرفوعة</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {documents.map((doc) => (
+                      <div key={doc.documentId} className="flex flex-col gap-1 p-3 rounded-md bg-secondary/30">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-sm truncate max-w-[150px]">{doc.documentType}</span>
+                          <Badge variant={doc.isVerified ? "success" : "outline"} className="text-[10px] px-1 py-0 h-4">
+                            {doc.isVerified ? "تم التحقق" : "قيد المراجعة"}
+                          </Badge>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(doc.uploadedAt)}
+                        </span>
+                        {doc.notes && (
+                          <span className="text-xs text-muted-foreground mt-1">
+                            ملاحظة: {doc.notes}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  className="w-full mt-4 text-xs"
+                  onClick={() => setIsDocsDialogOpen(true)}
+                  disabled={!donorId}
+                >
+                  <FileText className="h-4 w-4 ml-2" />
+                  {documents.length === 0 ? "رفع وثيقة طبية" : "إدارة الوثائق الطبية"}
+                </Button>
+
+                {/* Medical Documents Dialog */}
+                <MedicalDocumentsDialog
+                  donorId={donorId || null}
+                  isOpen={isDocsDialogOpen}
+                  onClose={() => setIsDocsDialogOpen(false)}
+                  donorName={apiUser?.fullName || "المتبرع"}
+                />
               </CardContent>
             </Card>
           </div>

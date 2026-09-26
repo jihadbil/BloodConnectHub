@@ -10,7 +10,7 @@ const urgentRequests = [
     bloodType: "O-",
     department: "قسم الطوارئ",
     unitsNeeded: 3,
-    urgency: "حرج",
+    urgency: "طارئ",
     timeAgo: "منذ 30 دقيقة",
   },
   {
@@ -39,7 +39,7 @@ const UrgentRequests = () => {
           <div>
             <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium mb-4">
               <Building2 className="h-4 w-4" />
-              <span>مستشفى غريان المركزي</span>
+              <span>مستشفى غريان التعليمي</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
               طلبات <span className="text-primary">عاجلة</span>
@@ -77,7 +77,7 @@ const UrgentRequests = () => {
                       <CardTitle className="text-lg">{request.department}</CardTitle>
                       <div className="flex items-center gap-1 text-muted-foreground text-sm mt-1">
                         <MapPin className="h-3 w-3" />
-                        <span>مستشفى غريان المركزي</span>
+                        <span>مستشفى غريان التعليمي</span>
                       </div>
                     </div>
                   </div>

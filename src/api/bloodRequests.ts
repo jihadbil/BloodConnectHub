@@ -25,6 +25,8 @@ interface ApiBloodRequest {
   createdAt?: string;
   patientID?: number;
   bloodTypeID?: number;
+  quantityFulfilled?: number;
+  quantityRemaining?: number;
 }
 
 /**
@@ -32,11 +34,11 @@ interface ApiBloodRequest {
  */
 function mapUrgencyLevelFromApi(level: number): UrgencyLevel {
   switch (level) {
-    case 0:
-      return 'Normal';
     case 1:
-      return 'Urgent';
+      return 'Normal';
     case 2:
+      return 'Urgent';
+    case 3:
       return 'Emergency';
     default:
       return 'Normal';
@@ -48,13 +50,13 @@ function mapUrgencyLevelFromApi(level: number): UrgencyLevel {
  */
 function mapRequestStatusFromApi(status: number): RequestStatus {
   switch (status) {
-    case 0:
-      return 'Pending';
     case 1:
-      return 'Fulfilled';
+      return 'Pending';
     case 2:
-      return 'PartiallyFulfilled';
+      return 'Fulfilled';
     case 3:
+      return 'PartiallyFulfilled';
+    case 4:
       return 'Cancelled';
     default:
       return 'Pending';
@@ -75,6 +77,8 @@ function transformApiBloodRequest(apiRequest: ApiBloodRequest): BloodRequest {
       description: ''
     } : undefined,
     quantityNeeded: apiRequest.quantityNeeded,
+    quantityFulfilled: apiRequest.quantityFulfilled,
+    quantityRemaining: apiRequest.quantityRemaining,
     urgencyLevel: mapUrgencyLevelFromApi(apiRequest.urgencyLevel),
     requestDate: apiRequest.requestDate || apiRequest.createdAt || new Date().toISOString(),
     requiredDate: apiRequest.requiredDate,
@@ -102,7 +106,7 @@ export const bloodRequestsApi = {
   getAll: async (page = 1, pageSize = 10): Promise<ServiceResponse<PagedResult<BloodRequest>>> => {
     const response = await apiClient.get<PagedResult<ApiBloodRequest>>(`/bloodrequests?pageNumber=${page}&pageSize=${pageSize}`);
     
-    if (response.success && response.data) {
+    if (response.isSuccess && response.data) {
       return {
         ...response,
         data: {
@@ -121,7 +125,7 @@ export const bloodRequestsApi = {
   getById: async (id: number): Promise<ServiceResponse<BloodRequest>> => {
     const response = await apiClient.get<ApiBloodRequest>(`/bloodrequests/${id}`);
     
-    if (response.success && response.data) {
+    if (response.isSuccess && response.data) {
       return {
         ...response,
         data: transformApiBloodRequest(response.data)
@@ -144,7 +148,7 @@ export const bloodRequestsApi = {
   getPending: async (): Promise<ServiceResponse<BloodRequest[]>> => {
     const response = await apiClient.get<ApiBloodRequest[]>('/bloodrequests/pending');
     
-    if (response.success && response.data) {
+    if (response.isSuccess && response.data) {
       return {
         ...response,
         data: response.data.map(transformApiBloodRequest)
@@ -160,7 +164,7 @@ export const bloodRequestsApi = {
   getUrgent: async (): Promise<ServiceResponse<BloodRequest[]>> => {
     const response = await apiClient.get<ApiBloodRequest[]>('/bloodrequests/urgent');
     
-    if (response.success && response.data) {
+    if (response.isSuccess && response.data) {
       return {
         ...response,
         data: response.data.map(transformApiBloodRequest)
@@ -201,5 +205,12 @@ export const bloodRequestsApi = {
    */
   cancel: async (id: number, reason: string): Promise<ServiceResponse<boolean>> => {
     return apiClient.post<boolean>(`/bloodrequests/${id}/cancel`, { reason });
+  },
+
+  /**
+   * حذف طلب
+   */
+  delete: async (id: number): Promise<ServiceResponse<boolean>> => {
+    return apiClient.delete<boolean>(`/bloodrequests/${id}`);
   },
 };

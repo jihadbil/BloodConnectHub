@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
     Droplet,
@@ -18,10 +20,13 @@ import {
     Plus,
     Minus,
     AlertTriangle,
-    CheckCircle2
+    CheckCircle2,
+    CalendarDays,
+    Trash2
 } from "lucide-react";
-import { useInventory, useLowStockInventory, useUpdateInventoryQuantity } from "@/hooks/useInventory";
-import { BLOOD_TYPE_MAP } from "@/types/api";
+import { useInventory, useLowStockInventory, useUpdateInventoryQuantity, useExpiringInventory, useRemoveExpiredInventory, useUpdateItemStatus } from "@/hooks/useInventory";
+import { BLOOD_TYPE_MAP, type BloodUnitStatus } from "@/types/api";
+import { formatDate } from "@/lib/utils";
 
 // Blood type card component
 const BloodTypeCard = ({
@@ -160,7 +165,10 @@ const InventoryManagement = () => {
     // جلب البيانات
     const { data, isLoading, error, refetch } = useInventory();
     const { data: lowStockData } = useLowStockInventory();
+    const { data: expiringData, isLoading: isExpiringLoading } = useExpiringInventory(14);
     const updateQuantity = useUpdateInventoryQuantity();
+    const removeExpired = useRemoveExpiredInventory();
+    const updateStatus = useUpdateItemStatus();
 
     // تحويل البيانات
     const inventory = data?.data?.map(inv => {
@@ -168,22 +176,20 @@ const InventoryManagement = () => {
         const invAny = inv as any;
         const bloodTypeId = inv.bloodTypeId ?? invAny.BloodTypeID ?? invAny.bloodTypeID;
         const quantityAvailable = inv.quantityAvailable ?? invAny.QuantityAvailable ?? 0;
+        const itemsCount = inv.itemsCount ?? invAny.ItemsCount ?? 0;
 
         return {
             bloodTypeId: bloodTypeId,
             bloodType: BLOOD_TYPE_MAP[bloodTypeId],
             quantity: quantityAvailable,
+            itemsCount: itemsCount,
             isLowStock: quantityAvailable < 5
         };
     }) || [];
 
-    // Debug: log inventory data to understand structure
-    console.log('Inventory API Response:', data?.data);
-    if (data?.data && data.data.length > 0) {
-        console.log('First inventory item:', data.data[0]);
-        console.log('Keys:', Object.keys(data.data[0]));
-    }
-    console.log('Processed inventory:', inventory);
+    const expiringItems = expiringData?.data || [];
+
+
 
     // حساب الإحصائيات
     const totalUnits = inventory.reduce((sum, inv) => sum + inv.quantity, 0);
@@ -192,16 +198,20 @@ const InventoryManagement = () => {
 
     // معالجة تحديث الكمية
     const handleUpdateQuantity = async (bloodTypeId: number, quantityChange: number) => {
-        console.log('handleUpdateQuantity called with:', { bloodTypeId, quantityChange });
-        if (!bloodTypeId) {
-            console.error('bloodTypeId is undefined!');
-            return;
+        if (!bloodTypeId || quantityChange === 0) return;
+        await updateQuantity.mutateAsync({ bloodTypeId, data: { quantityChange } });
+    };
+
+    // معالجة إزالة الوحدات المنتهية
+    const handleRemoveExpired = async () => {
+        if (confirm("هل أنت متأكد من إزالة جميع الوحدات المنتهية الصلاحية؟ سيتم تحديث حالة الوحدات إلى 'Discarded'.")) {
+            await removeExpired.mutateAsync();
         }
-        if (quantityChange === 0) {
-            console.log('No change in quantity, skipping update');
-            return;
-        }
-        await updateQuantity.mutateAsync({ bloodTypeId, quantity: quantityChange });
+    };
+
+    // معالجة تحديث حالة الوحدة
+    const handleUpdateStatus = async (id: number, status: BloodUnitStatus) => {
+        await updateStatus.mutateAsync({ id, status });
     };
 
     return (
@@ -320,57 +330,158 @@ const InventoryManagement = () => {
                     </Alert>
                 )}
 
-                {/* Inventory Grid */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>مخزون فصائل الدم</CardTitle>
-                        <CardDescription>
-                            انقر على "تعديل" لتغيير الكمية أو استخدم أزرار + و - للتعديل السريع
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {isLoading ? (
-                            <InventorySkeleton />
-                        ) : inventory.length === 0 ? (
-                            <div className="text-center py-12">
-                                <Package className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
-                                <h3 className="text-lg font-medium">لا توجد بيانات مخزون</h3>
-                                <p className="text-muted-foreground">لم يتم تسجيل أي مخزون بعد</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                {inventory.map((item) => (
-                                    <BloodTypeCard
-                                        key={item.bloodTypeId}
-                                        bloodType={item.bloodType}
-                                        quantity={item.quantity}
-                                        isLowStock={item.isLowStock}
-                                        onUpdate={(newQuantity) => {
-                                            const change = newQuantity - item.quantity;
-                                            handleUpdateQuantity(item.bloodTypeId, change);
-                                        }}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                {/* Inventory Grid & Expiring Tabs */}
+                <Tabs defaultValue="overview" className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <TabsList>
+                            <TabsTrigger value="overview">نظرة عامة على الفصائل</TabsTrigger>
+                            <TabsTrigger value="expiring" className="relative">
+                                الوحدات القريبة من الانتهاء
+                                {expiringItems.length > 0 && (
+                                    <Badge variant="destructive" className="ml-2 absolute -top-2 -left-2 px-1.5 py-0.5 text-xs">
+                                        {expiringItems.length}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
+                        </TabsList>
+                    </div>
 
-                {/* Legend */}
-                <div className="mt-6 flex items-center justify-center gap-6 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-primary" />
-                        مخزون طبيعي (≥5 وحدات)
-                    </span>
-                    <span className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-warning" />
-                        مخزون منخفض (1-4 وحدات)
-                    </span>
-                    <span className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-destructive" />
-                        نفد المخزون (0 وحدة)
-                    </span>
-                </div>
+                    <TabsContent value="overview">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>مخزون فصائل الدم</CardTitle>
+                                <CardDescription>
+                                    انقر على "تعديل" لتغيير الكمية أو استخدم أزرار + و - للتعديل السريع
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {isLoading ? (
+                                    <InventorySkeleton />
+                                ) : inventory.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <Package className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                                        <h3 className="text-lg font-medium">لا توجد بيانات مخزون</h3>
+                                        <p className="text-muted-foreground">لم يتم تسجيل أي مخزون بعد</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                        {inventory.map((item) => (
+                                            <BloodTypeCard
+                                                key={item.bloodTypeId}
+                                                bloodType={item.bloodType}
+                                                quantity={item.quantity}
+                                                isLowStock={item.isLowStock}
+                                                onUpdate={(newQuantity) => {
+                                                    const change = newQuantity - item.quantity;
+                                                    handleUpdateQuantity(item.bloodTypeId, change);
+                                                }}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Legend */}
+                        <div className="mt-6 flex items-center justify-center gap-6 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-primary" />
+                                مخزون طبيعي (≥5 وحدات)
+                            </span>
+                            <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-warning" />
+                                مخزون منخفض (1-4 وحدات)
+                            </span>
+                            <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-destructive" />
+                                نفد المخزون (0 وحدة)
+                            </span>
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="expiring">
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                                <div>
+                                    <CardTitle>الوحدات القريبة من الانتهاء (خلال 14 يوم)</CardTitle>
+                                    <CardDescription>متابعة وإدارة الوحدات التي شارفت صلاحيتها على الانتهاء</CardDescription>
+                                </div>
+                                <Button variant="destructive" onClick={handleRemoveExpired} disabled={removeExpired.isPending}>
+                                    {removeExpired.isPending ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <Trash2 className="h-4 w-4 ml-2" />}
+                                    إزالة جميع الوحدات المنتهية
+                                </Button>
+                            </CardHeader>
+                            <CardContent>
+                                {isExpiringLoading ? (
+                                    <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+                                ) : expiringItems.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <CheckCircle2 className="h-16 w-16 text-success/30 mx-auto mb-4" />
+                                        <h3 className="text-lg font-medium">كل شيء على ما يرام</h3>
+                                        <p className="text-muted-foreground">لا توجد وحدات قريبة من الانتهاء في المخزون</p>
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>رقم الوحدة</TableHead>
+                                                <TableHead>الفصيلة</TableHead>
+                                                <TableHead>تاريخ الانتهاء</TableHead>
+                                                <TableHead>الحالة</TableHead>
+                                                <TableHead>تحديث الحالة</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {expiringItems.map(item => (
+                                                <TableRow key={item.itemId}>
+                                                    <TableCell className="font-mono">{item.itemId}</TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-2">
+                                                            <Droplet className="h-4 w-4 text-primary fill-primary" />
+                                                            <span className="font-bold">{item.bloodTypeName}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className={`flex items-center gap-1 ${item.isExpired ? 'text-destructive font-bold' : 'text-warning'}`}>
+                                                            <CalendarDays className="h-4 w-4" />
+                                                            {formatDate(item.expiryDate)}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={item.isExpired ? "destructive" : "warning"}>
+                                                            {item.isExpired ? "منتهية الصلاحية" : "قريبة من الانتهاء"}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="text-destructive hover:bg-destructive hover:text-white"
+                                                                onClick={() => handleUpdateStatus(item.itemId, 4)} // 4 = Discarded
+                                                                disabled={updateStatus.isPending}
+                                                            >
+                                                                إتلاف
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleUpdateStatus(item.itemId, 2)} // 2 = Used
+                                                                disabled={updateStatus.isPending}
+                                                            >
+                                                                استخدام
+                                                            </Button>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </main>
             <Footer />
         </div>

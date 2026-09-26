@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,11 +11,15 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Droplet, MapPin, AlertCircle, Loader2, Clock, CheckCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { BloodRequest, BloodRequestDetails } from "@/types/api";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { BloodRequest } from "@/types/api";
 import { BLOOD_TYPE_MAP } from "@/types/api";
-import { useBloodRequestResponse } from "@/hooks/useBloodRequestResponse";
-import { bloodRequestsApi } from "@/api/bloodRequests";
-import { formatTimeAgo } from "@/lib/utils";
+import { useCreateDonorResponse } from "@/hooks/useDonorResponses";
+import { useAuth } from "@/hooks/useAuth";
+import { formatTimeAgo, mapUrgencyLevel } from "@/lib/utils";
+import { useCreateDonation } from "@/hooks/useDonations";
+import { useDonorByUserId } from "@/hooks/useDonors";
 
 interface ResponseDialogProps {
   open: boolean;
@@ -25,118 +29,91 @@ interface ResponseDialogProps {
 }
 
 const urgencyConfig = {
-  Normal: { label: "عادي", variant: "secondary" as const, className: "" },
-  Urgent: { label: "عاجل", variant: "outline" as const, className: "border-orange-500 text-orange-600 bg-orange-50" },
-  Emergency: { label: "حرج", variant: "destructive" as const, className: "bg-destructive text-white" },
-};
-
-/**
- * Get appropriate action for error type
- * Implements requirements 8.4, 8.5, 8.6, 10.1, 10.5
- */
-const getErrorAction = (errorType: 'auth' | 'compatibility' | 'eligibility' | 'api' | 'unknown'): {
-  action: 'retry' | 'dismiss' | 'contact';
-  actionLabel: string;
-} => {
-  switch (errorType) {
-    case 'auth':
-      return { action: 'dismiss', actionLabel: 'حسناً' };
-    case 'compatibility':
-    case 'eligibility':
-      return { action: 'dismiss', actionLabel: 'فهمت' };
-    case 'api':
-      return { action: 'retry', actionLabel: 'إعادة المحاولة' };
-    case 'unknown':
-    default:
-      return { action: 'contact', actionLabel: 'حسناً' };
-  }
+  normal: { label: "عادي", variant: "secondary" as const, className: "" },
+  urgent: { label: "عاجل", variant: "outline" as const, className: "border-orange-500 text-orange-600 bg-orange-50" },
+  critical: { label: "طارئ", variant: "destructive" as const, className: "bg-destructive text-white" },
 };
 
 export function ResponseDialog({ open, onOpenChange, request, onSuccess }: ResponseDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [errorType, setErrorType] = useState<'auth' | 'compatibility' | 'eligibility' | 'api' | 'unknown'>('unknown');
   const [showSuccess, setShowSuccess] = useState(false);
-  const [donationId, setDonationId] = useState<number | null>(null);
-  const [requestDetails, setRequestDetails] = useState<BloodRequestDetails | null>(null);
-  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-  const { respondToRequest } = useBloodRequestResponse();
+  const [responseId, setResponseId] = useState<number | null>(null);
+  const [notes, setNotes] = useState<string>("");
 
-  // جلب تفاصيل الطلب الكاملة عند فتح الحوار
-  useEffect(() => {
-    if (open && request) {
-      setIsLoadingDetails(true);
-      setError(null);
-      
-      bloodRequestsApi.getDetails(request.requestId)
-        .then(response => {
-          if (response.success && response.data) {
-            console.log("Request details loaded:", response.data);
-            setRequestDetails(response.data);
-          } else {
-            console.error("Failed to load request details:", response.message);
-            setError('فشل في تحميل تفاصيل الطلب');
-          }
-        })
-        .catch(err => {
-          console.error("Error loading request details:", err);
-          setError('حدث خطأ أثناء تحميل تفاصيل الطلب');
-        })
-        .finally(() => {
-          setIsLoadingDetails(false);
-        });
-    } else {
-      setRequestDetails(null);
-    }
-  }, [open, request]);
+  const { user } = useAuth();
+  const createDonorResponse = useCreateDonorResponse();
+
+  // جلب بيانات المتبرع لاستخراج bloodTypeID — يشارك Cache مع DonorDashboard
+  const { data: donorData } = useDonorByUserId(user?.id || "");
+  const donorBloodTypeID =
+    (donorData?.data as any)?.bloodTypeID ||
+    (donorData?.data as any)?.bloodTypeId;
+
+  const createDonation = useCreateDonation();
 
   const handleConfirm = async () => {
-    if (!requestDetails) return;
+    if (!request) return;
+
+    const donorId = (user as any)?.donorID || (user as any)?.donorId;
+    if (!donorId) {
+      setError('لم يتم العثور على معلومات المتبرع. يرجى تسجيل الخروج والدخول مرة أخرى.');
+      return;
+    }
+
+    const requestId = request.requestId || (request as any).requestID || (request as any).id;
+    if (!requestId) {
+      setError('معرف الطلب غير صحيح.');
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
 
     try {
-      // استخدام bloodType.bloodTypeID من التفاصيل الكاملة
-      const bloodTypeId = requestDetails.bloodType?.bloodTypeID || (requestDetails.bloodType as any)?.bloodTypeId || 0;
-      
-      console.log("Request details:", requestDetails);
-      console.log("requestDetails.bloodType:", requestDetails.bloodType);
-      console.log("Extracted bloodTypeId:", bloodTypeId);
-      
-      if (!bloodTypeId || bloodTypeId === 0) {
-        setError('فشل في تحديد فصيلة الدم المطلوبة. يرجى المحاولة مرة أخرى.');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      const result = await respondToRequest(
-        requestDetails.requestID || requestDetails.requestId,
-        bloodTypeId,
-        requestDetails.quantityNeeded
-      );
+      const result = await createDonorResponse.mutateAsync({
+        donorId,
+        requestId,
+        notes: notes.trim() || undefined,
+      });
 
-      if (result.success) {
-        // Display success message with donation ID
-        setDonationId(result.donationId || null);
+      if (result.success && result.data) {
+        setResponseId(result.data.responseId);
+
+        // ─── إنشاء سجل تبرع تلقائي بحالة قيد الفحص ───
+        // POST /api/Donations — الـ Backend يُعيّن testResult = Pending (1) تلقائياً
+        if (donorBloodTypeID && donorId) {
+          try {
+            const patientStr = request.patientName || request.patient?.fullName;
+            await createDonation.mutateAsync({
+              donorID: donorId,
+              bloodTypeID: donorBloodTypeID,
+              donationDate: new Date().toISOString(),
+              quantity: 1,
+              notes: `استجابة لطلب الدم #${requestId}${patientStr ? ` - للمريض: ${patientStr}` : ''}`,
+            });
+          } catch {
+            // فشل إنشاء سجل التبرع لا يوقف العملية الأصلية
+            // رسالة النجاح تُعرض للمستخدم بشكل طبيعي
+            console.warn("[ResponseDialog] تعذّر إنشاء سجل التبرع التلقائي");
+          }
+        }
+        // ─── نهاية الإضافة ───
+
         setShowSuccess(true);
-        
-        // Auto-close dialog after 3 seconds
+
         setTimeout(() => {
           setShowSuccess(false);
-          setDonationId(null);
+          setResponseId(null);
+          setNotes('');
           onOpenChange(false);
-          // Call onSuccess callback to refresh list
           onSuccess();
         }, 3000);
       } else {
-        // Set error with type information for enhanced display
-        setError(result.error || 'حدث خطأ أثناء معالجة الطلب');
-        setErrorType(result.errorType || 'unknown');
+        setError(result.message || 'حدث خطأ أثناء تسجيل الاستجابة');
       }
-    } catch (err) {
-      setError('حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.');
-      setErrorType('unknown');
+    } catch (err: any) {
+      setError(err?.message || 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.');
     } finally {
       setIsSubmitting(false);
     }
@@ -145,32 +122,19 @@ export function ResponseDialog({ open, onOpenChange, request, onSuccess }: Respo
   const handleClose = () => {
     if (!isSubmitting) {
       setError(null);
-      setErrorType('unknown');
       setShowSuccess(false);
-      setDonationId(null);
-      setRequestDetails(null);
+      setResponseId(null);
+      setNotes('');
       onOpenChange(false);
     }
   };
 
   if (!request) return null;
 
-  // استخدام التفاصيل الكاملة إذا كانت متوفرة، وإلا استخدام request الأصلي
-  const displayRequest = requestDetails || request;
-  
-  // استخراج bloodTypeId من التفاصيل الكاملة
-  const bloodTypeId = requestDetails?.bloodType?.bloodTypeID || 
-                       (requestDetails?.bloodType as any)?.bloodTypeId || 
-                       (request as any).bloodTypeID || 
-                       request.bloodTypeId || 
-                       0;
-  
-  console.log("Display - requestDetails:", requestDetails);
-  console.log("Display - bloodTypeId:", bloodTypeId);
-  
-  // استخدام BLOOD_TYPE_MAP مباشرة لأن API يُرجع bloodTypeId
-  const bloodTypeName = BLOOD_TYPE_MAP[bloodTypeId] || displayRequest.bloodType?.typeName || `فصيلة ${bloodTypeId}`;
-  const urgency = urgencyConfig[displayRequest.urgencyLevel] || urgencyConfig.Normal;
+  const bloodTypeId = (request as any).bloodTypeID || request.bloodTypeId || 0;
+  const bloodTypeName = BLOOD_TYPE_MAP[bloodTypeId] || request.bloodType?.typeName || `فصيلة ${bloodTypeId}`;
+  const urgencyMapped = mapUrgencyLevel(request.urgencyLevel);
+  const urgency = urgencyConfig[urgencyMapped] || urgencyConfig.normal;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -178,196 +142,153 @@ export function ResponseDialog({ open, onOpenChange, request, onSuccess }: Respo
         <DialogHeader>
           <DialogTitle>تأكيد الاستجابة للطلب</DialogTitle>
           <DialogDescription>
-            راجع تفاصيل الطلب أدناه وقم بتأكيد استجابتك للتبرع
+            سجل اهتمامك بالتبرع لمساعدة المريض، وسيتواصل معك المستشفى لتأكيد الموعد.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Loading State */}
-          {isLoadingDetails && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="mr-3 text-muted-foreground">جاري تحميل تفاصيل الطلب...</span>
-            </div>
-          )}
-
           {/* Success Message */}
-          {showSuccess && donationId && (
+          {showSuccess && responseId && (
             <Alert className="bg-green-50 border-green-500">
               <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertTitle className="text-green-800">تم تسجيل استجابتك بنجاح!</AlertTitle>
-              <AlertDescription className="text-green-700">
-                <p className="mb-2">شكراً لك على استجابتك السريعة. رقم التبرع المرجعي: <strong>#{donationId}</strong></p>
-                <p className="text-sm">
-                  <strong>الخطوات التالية:</strong>
-                </p>
-                <ul className="text-sm list-disc list-inside mr-4 mt-1">
-                  <li>سيتم التواصل معك من قبل مستشفى غريان المركزي خلال 24 ساعة</li>
-                  <li>سيتم تحديد موعد التبرع المناسب لك</li>
-                  <li>يرجى التأكد من أهليتك الصحية للتبرع</li>
+              <AlertTitle className="text-green-800 font-bold">تم تسجيل اهتمامك بالتبرع بنجاح!</AlertTitle>
+              <AlertDescription className="text-green-700 mt-2">
+                <p className="mb-2">شكراً لك على مبادرتك الإنسانية. رقم الاستجابة المرجعي: <strong>#{responseId}</strong></p>
+                <p className="text-sm font-semibold">الخطوات التالية:</p>
+                <ul className="text-sm list-disc list-inside mr-4 mt-1 space-y-1">
+                  <li>سيتواصل معك مستشفى غريان التعليمي قريباً لتأكيد الموعد المناسب للتبرع.</li>
+                  <li>ستصلك رسالة إشعار فور تأكيد المستشفى لاستجابتك.</li>
+                  <li>يرجى التأكد من إحضار بطاقة الهوية عند الذهاب للتبرع.</li>
                 </ul>
-                <p className="text-sm mt-2 text-muted-foreground">سيتم إغلاق هذه النافذة تلقائياً...</p>
+                <p className="text-sm mt-3 text-muted-foreground">سيتم إغلاق هذه النافذة تلقائياً...</p>
               </AlertDescription>
             </Alert>
           )}
 
-          {/* Request Details - Hide when showing success */}
+          {/* Request Details & Input Form - Hide when showing success */}
           {!showSuccess && (
             <>
               <div className="bg-secondary/50 p-4 rounded-lg space-y-3">
-            {/* Blood Type and Quantity */}
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Droplet className="h-12 w-12 text-primary fill-primary" />
-                <span className="absolute inset-0 flex items-center justify-center text-primary-foreground font-bold text-xs">
-                  {bloodTypeName}
-                </span>
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-foreground text-lg">
-                  فصيلة الدم: {bloodTypeName}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  الكمية المطلوبة: {request.quantityNeeded} وحدة
-                </p>
-              </div>
-            </div>
-
-            {/* Urgency Level */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">مستوى الاستعجال:</span>
-              <Badge variant={urgency.variant} className={urgency.className}>
-                {urgency.label}
-              </Badge>
-            </div>
-
-            {/* Department/Description */}
-            {request.notes && (
-              <div>
-                <span className="text-sm text-muted-foreground">القسم/الوصف:</span>
-                <p className="text-sm text-foreground mt-1">{request.notes}</p>
-              </div>
-            )}
-
-            {/* Hospital Info */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
-              <MapPin className="h-4 w-4" />
-              <span>مستشفى غريان المركزي</span>
-            </div>
-
-            {/* Request Date */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              <span>تاريخ الطلب: {formatTimeAgo(request.requestDate)}</span>
-            </div>
-          </div>
-
-          {/* Important Notice */}
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>ملاحظة مهمة</AlertTitle>
-            <AlertDescription>
-              بعد تأكيد الاستجابة، سيتم التواصل معك من قبل المستشفى لتحديد موعد التبرع. يرجى التأكد من أهليتك للتبرع.
-            </AlertDescription>
-          </Alert>
-
-          {/* Error Display */}
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>خطأ</AlertTitle>
-              <AlertDescription>
-                <p className="mb-3">{error}</p>
-                {/* Display appropriate action based on error type */}
-                <div className="flex gap-2 mt-2">
-                  {(() => {
-                    const { action, actionLabel } = getErrorAction(errorType);
-                    
-                    if (action === 'retry') {
-                      return (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleConfirm}
-                            disabled={isSubmitting}
-                            className="bg-white hover:bg-gray-50"
-                          >
-                            {actionLabel}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setError(null)}
-                            className="bg-white hover:bg-gray-50"
-                          >
-                            إلغاء
-                          </Button>
-                        </>
-                      );
-                    } else if (action === 'contact') {
-                      return (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setError(null)}
-                            className="bg-white hover:bg-gray-50"
-                          >
-                            {actionLabel}
-                          </Button>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            إذا استمرت المشكلة، يرجى التواصل مع مستشفى غريان المركزي
-                          </p>
-                        </>
-                      );
-                    } else {
-                      // dismiss action
-                      return (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setError(null)}
-                          className="bg-white hover:bg-gray-50"
-                        >
-                          {actionLabel}
-                        </Button>
-                      );
-                    }
-                  })()}
+                {/* Blood Type and Quantity */}
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Droplet className="h-12 w-12 text-primary fill-primary" />
+                    <span className="absolute inset-0 flex items-center justify-center text-primary-foreground font-bold text-sm">
+                      {bloodTypeName}
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-foreground text-lg">
+                      فصيلة الدم: {bloodTypeName}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      الكمية المطلوبة: {request.quantityNeeded} وحدة
+                    </p>
+                  </div>
                 </div>
-              </AlertDescription>
-            </Alert>
-          )}
+
+                {/* Urgency Level */}
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-sm text-muted-foreground">مستوى الاستعجال:</span>
+                  <Badge variant={urgency.variant} className={urgency.className}>
+                    {urgency.label}
+                  </Badge>
+                </div>
+
+                {/* Patient Name / Hospital Info */}
+                {request.patientName && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-sm text-muted-foreground">المريض:</span>
+                    <span className="font-medium text-foreground">{request.patientName}</span>
+                  </div>
+                )}
+
+                {/* Description / Notes */}
+                {request.notes && (
+                  <div className="pt-1">
+                    <span className="text-sm text-muted-foreground">القسم/الوصف:</span>
+                    <p className="text-sm text-foreground mt-1 bg-white/40 p-2 rounded border border-gray-100">{request.notes}</p>
+                  </div>
+                )}
+
+                {/* Hospital Info */}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
+                  <MapPin className="h-4 w-4" />
+                  <span>مستشفى غريان التعليمي</span>
+                </div>
+
+                {/* Request Date */}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  <span>تاريخ الطلب: {formatTimeAgo(request.requestDate || (request as any).createdAt || (request as any).requestDate || new Date().toISOString())}</span>
+                </div>
+              </div>
+
+              {/* Optional Notes Form */}
+              <div className="space-y-2">
+                <Label htmlFor="response-notes">ملاحظات (اختياري)</Label>
+                <Textarea
+                  id="response-notes"
+                  placeholder="مثال: متاح في الفترة الصباحية، أو أي معلومات إضافية..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  className="resize-none"
+                />
+                <div className="flex justify-end">
+                  <span className="text-xs text-muted-foreground">{notes.length}/500</span>
+                </div>
+              </div>
+
+              {/* Important Notice */}
+              <Alert className="bg-blue-50/50 border-blue-200">
+                <AlertCircle className="h-4 w-4 text-blue-600" />
+                <AlertTitle className="text-blue-800 font-semibold">ملاحظة هامة</AlertTitle>
+                <AlertDescription className="text-blue-700 text-xs mt-1">
+                  بعد تسجيل اهتمامك، سيتواصل معك فريق المستشفى لتحديد موعد التبرع المناسب. ستصلك رسالة تأكيد لاحقاً.
+                </AlertDescription>
+              </Alert>
+
+              {/* Error Display */}
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>خطأ</AlertTitle>
+                  <AlertDescription className="mt-1">
+                    <p>{error}</p>
+                  </AlertDescription>
+                </Alert>
+              )}
             </>
           )}
         </div>
 
         {/* Footer Actions - Hide when showing success */}
         {!showSuccess && (
-          <DialogFooter className="gap-2">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={isSubmitting || isLoadingDetails}
-          >
-            إلغاء
-          </Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={isSubmitting || isLoadingDetails || !requestDetails}
-            className="gap-2"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                جاري المعالجة...
-              </>
-            ) : (
-              'تأكيد الاستجابة'
-            )}
-          </Button>
-        </DialogFooter>
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              disabled={isSubmitting}
+            >
+              إلغاء
+            </Button>
+            <Button
+              onClick={handleConfirm}
+              disabled={isSubmitting}
+              className="gap-2"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  جاري التسجيل...
+                </>
+              ) : (
+                'أنا مهتم بالتبرع'
+              )}
+            </Button>
+          </DialogFooter>
         )}
       </DialogContent>
     </Dialog>

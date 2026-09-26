@@ -31,7 +31,7 @@ const HeroSection = () => {
           </h1>
           
           <p className="text-lg md:text-xl text-primary-foreground/80 mb-8 leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
-            بنك الدم في مستشفى غريان المركزي يربط بين المتبرعين والمرضى المحتاجين لتسهيل الوصول السريع للمتبرعين المناسبين وإنقاذ الأرواح.
+            بنك الدم في مستشفى غريان التعليمي يربط بين المتبرعين والمرضى المحتاجين لتسهيل الوصول السريع للمتبرعين المناسبين وإنقاذ الأرواح.
           </p>
           
           <div className="flex flex-wrap gap-4 animate-fade-in" style={{ animationDelay: "0.3s" }}>
@@ -46,31 +46,6 @@ const HeroSection = () => {
                 طلبات الدم العاجلة
               </Link>
             </Button>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-6 mt-12 animate-fade-in" style={{ animationDelay: "0.4s" }}>
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Users className="h-6 w-6 text-primary" />
-                <span className="text-3xl font-bold text-primary-foreground">+5000</span>
-              </div>
-              <p className="text-primary-foreground/70 text-sm">متبرع مسجل</p>
-            </div>
-            <div className="text-center border-r border-l border-primary-foreground/20">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Heart className="h-6 w-6 text-primary" />
-                <span className="text-3xl font-bold text-primary-foreground">+1200</span>
-              </div>
-              <p className="text-primary-foreground/70 text-sm">عملية تبرع</p>
-            </div>
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Building2 className="h-6 w-6 text-primary" />
-                <span className="text-3xl font-bold text-primary-foreground">+50</span>
-              </div>
-              <p className="text-primary-foreground/70 text-sm">مستشفى شريك</p>
-            </div>
           </div>
         </div>
       </div>

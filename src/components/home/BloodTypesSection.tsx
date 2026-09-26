@@ -2,14 +2,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Droplet } from "lucide-react";
 
 const bloodTypes = [
-  { type: "A+", canDonateTo: "A+, AB+", canReceiveFrom: "A+, A-, O+, O-", urgency: "normal" },
-  { type: "A-", canDonateTo: "A+, A-, AB+, AB-", canReceiveFrom: "A-, O-", urgency: "high" },
-  { type: "B+", canDonateTo: "B+, AB+", canReceiveFrom: "B+, B-, O+, O-", urgency: "normal" },
-  { type: "B-", canDonateTo: "B+, B-, AB+, AB-", canReceiveFrom: "B-, O-", urgency: "high" },
-  { type: "AB+", canDonateTo: "AB+", canReceiveFrom: "جميع الفصائل", urgency: "low" },
-  { type: "AB-", canDonateTo: "AB+, AB-", canReceiveFrom: "A-, B-, AB-, O-", urgency: "high" },
-  { type: "O+", canDonateTo: "A+, B+, AB+, O+", canReceiveFrom: "O+, O-", urgency: "normal" },
-  { type: "O-", canDonateTo: "جميع الفصائل", canReceiveFrom: "O-", urgency: "critical" },
+  { type: "O-", canDonateTo: "جميع الفصائل", canReceiveFrom: "O- فقط", urgency: "critical" },
+  { type: "O+", canDonateTo: "O+، A+، B+، AB+", canReceiveFrom: "O-، O+", urgency: "normal" },
+  { type: "A-", canDonateTo: "A-، A+، AB-، AB+", canReceiveFrom: "O-، A-", urgency: "high" },
+  { type: "A+", canDonateTo: "A+، AB+", canReceiveFrom: "O-، O+، A-، A+", urgency: "normal" },
+  { type: "B-", canDonateTo: "B-، B+، AB-، AB+", canReceiveFrom: "O-، B-", urgency: "high" },
+  { type: "B+", canDonateTo: "B+، AB+", canReceiveFrom: "O-، O+، B-، B+", urgency: "normal" },
+  { type: "AB-", canDonateTo: "AB-، AB+", canReceiveFrom: "O-، A-، B-، AB-", urgency: "high" },
+  { type: "AB+", canDonateTo: "AB+ فقط", canReceiveFrom: "جميع الفصائل", urgency: "low" },
 ];
 
 const urgencyColors = {

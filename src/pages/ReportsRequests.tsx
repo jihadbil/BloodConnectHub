@@ -48,6 +48,9 @@ const URGENCY_COLOR: Record<string, string> = {
     Emergency: '#dc2626',
     Urgent: '#f97316',
     Normal: '#16a34a',
+    'طارئ': '#dc2626',
+    'عاجل': '#f97316',
+    'عادي': '#16a34a',
 };
 
 const BLOOD_COLORS = ['#dc2626', '#ef4444', '#f97316', '#fb923c', '#7c3aed', '#a855f7', '#0ea5e9', '#38bdf8'];
@@ -109,11 +112,23 @@ export default function ReportsRequests() {
     const { data: pbtData, isLoading: pbtLoading } = usePatientsByBloodType();
     const { data: activeReqData, isLoading: activeReqLoading } = usePatientsWithActiveRequests();
 
+    const URGENCY_MAP: Record<string, string> = {
+        Normal: 'عادي',
+        Urgent: 'عاجل',
+        Emergency: 'طارئ',
+    };
+
     const status = statusData?.data;
-    const urgency = urgencyData?.data ?? [];
+    const urgency = (urgencyData?.data ?? []).map(u => ({
+        ...u,
+        urgencyLevel: URGENCY_MAP[u.urgencyLevel] ?? u.urgencyLevel
+    }));
     const fulfillRate = fulfillRateData?.data ?? [];
     const reqByBloodType = reqBloodTypeData?.data ?? [];
-    const avgTime = avgTimeData?.data ?? [];
+    const avgTime = (avgTimeData?.data ?? []).map(a => ({
+        ...a,
+        urgencyLevel: URGENCY_MAP[a.urgencyLevel] ?? a.urgencyLevel
+    }));
     const patientCount = countData?.data;
     const patientsByBT = pbtData?.data ?? [];
     const activePatients = activeReqData?.data ?? [];
@@ -195,7 +210,7 @@ export default function ReportsRequests() {
                                 {urgencyLoading ? (
                                     <SectionSkeleton />
                                 ) : (
-                                    <ResponsiveContainer width="100%" height={240}>
+                                    <ResponsiveContainer width="100%" height={350}>
                                         <BarChart data={urgency} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                                             <XAxis dataKey="urgencyLevel" tick={{ fontSize: 12 }} />
@@ -224,7 +239,7 @@ export default function ReportsRequests() {
                                 {reqBloodTypeLoading ? (
                                     <SectionSkeleton />
                                 ) : (
-                                    <ResponsiveContainer width="100%" height={240}>
+                                    <ResponsiveContainer width="100%" height={350}>
                                         <PieChart>
                                             <Pie
                                                 data={reqByBloodType}
@@ -233,9 +248,26 @@ export default function ReportsRequests() {
                                                 outerRadius={90}
                                                 dataKey="requestCount"
                                                 nameKey="bloodType"
-                                                label={({ bloodType, percentage }) =>
-                                                    `${bloodType} ${percentage.toFixed(0)}%`
-                                                }
+                                                label={({ cx, cy, midAngle, innerRadius, outerRadius, percentage, bloodType }) => {
+                                                    const RADIAN = Math.PI / 180;
+                                                    const radius = outerRadius + 22;
+                                                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                                    const textAnchor = x > cx ? 'start' : 'end';
+                                                    return (
+                                                        <text
+                                                            x={x}
+                                                            y={y}
+                                                            fill="currentColor"
+                                                            className="text-xs font-semibold"
+                                                            textAnchor={textAnchor}
+                                                            dominantBaseline="central"
+                                                        >
+                                                            {`${bloodType} ${percentage.toFixed(0)}%`}
+                                                        </text>
+                                                    );
+                                                }}
+                                                labelLine={{ stroke: 'currentColor', strokeWidth: 1, opacity: 0.5 }}
                                             >
                                                 {reqByBloodType.map((_e, i) => (
                                                     <Cell key={i} fill={BLOOD_COLORS[i % BLOOD_COLORS.length]} />
@@ -368,7 +400,7 @@ export default function ReportsRequests() {
                                 {pbtLoading ? (
                                     <SectionSkeleton />
                                 ) : (
-                                    <ResponsiveContainer width="100%" height={240}>
+                                    <ResponsiveContainer width="100%" height={350}>
                                         <PieChart>
                                             <Pie
                                                 data={patientsByBT}
@@ -377,9 +409,26 @@ export default function ReportsRequests() {
                                                 outerRadius={90}
                                                 dataKey="patientCount"
                                                 nameKey="bloodType"
-                                                label={({ bloodType, percentage }) =>
-                                                    `${bloodType} ${percentage.toFixed(0)}%`
-                                                }
+                                                label={({ cx, cy, midAngle, innerRadius, outerRadius, percentage, bloodType }) => {
+                                                    const RADIAN = Math.PI / 180;
+                                                    const radius = outerRadius + 30;
+                                                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                                    const textAnchor = x > cx ? 'start' : 'end';
+                                                    return (
+                                                        <text
+                                                            x={x}
+                                                            y={y}
+                                                            fill="currentColor"
+                                                            className="text-xs font-semibold"
+                                                            textAnchor={textAnchor}
+                                                            dominantBaseline="central"
+                                                        >
+                                                            {`${bloodType} ${percentage.toFixed(0)}%`}
+                                                        </text>
+                                                    );
+                                                }}
+                                                labelLine={{ stroke: 'currentColor', strokeWidth: 1, opacity: 0.5 }}
                                             >
                                                 {patientsByBT.map((_e, i) => (
                                                     <Cell key={i} fill={BLOOD_COLORS[i % BLOOD_COLORS.length]} />
@@ -404,7 +453,7 @@ export default function ReportsRequests() {
                                 ) : activePatients.length === 0 ? (
                                     <p className="text-center text-muted-foreground py-10">لا يوجد مرضى بطلبات نشطة حالياً</p>
                                 ) : (
-                                    <div className="overflow-auto max-h-56">
+                                    <div className="overflow-auto max-h-[350px]">
                                         <table className="w-full text-sm">
                                             <thead className="sticky top-0 bg-white">
                                                 <tr className="border-b bg-gray-50">

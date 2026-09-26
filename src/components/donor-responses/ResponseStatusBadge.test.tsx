@@ -6,13 +6,13 @@ import { ResponseStatus } from '@/types/donor-response';
 describe('ResponseStatusBadge', () => {
   it('renders Interested status with correct label and color', () => {
     const { container } = render(<ResponseStatusBadge status={ResponseStatus.Interested} />);
-    expect(screen.getByText('مهتم')).toBeInTheDocument();
+    expect(screen.getByText('مهتم بالتبرع')).toBeInTheDocument();
     expect(container.firstChild).toHaveClass('bg-blue-100', 'text-blue-800');
   });
 
   it('renders Confirmed status with correct label and color', () => {
     const { container } = render(<ResponseStatusBadge status={ResponseStatus.Confirmed} />);
-    expect(screen.getByText('مؤكد')).toBeInTheDocument();
+    expect(screen.getByText('تم التأكيد')).toBeInTheDocument();
     expect(container.firstChild).toHaveClass('bg-purple-100', 'text-purple-800');
   });
 

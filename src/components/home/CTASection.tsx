@@ -18,7 +18,7 @@ const CTASection = () => {
                 كن بطلاً اليوم
               </h3>
               <p className="text-primary-foreground/80 mb-6 leading-relaxed">
-                سجّل الآن كمتبرع في بنك الدم بمستشفى غريان المركزي وكن جزءاً من مجتمع المنقذين للأرواح.
+                سجّل الآن كمتبرع في بنك الدم بمستشفى غريان التعليمي وكن جزءاً من مجتمع المنقذين للأرواح.
               </p>
               <Button variant="hero" size="lg" asChild className="group">
                 <Link to="/register">
@@ -42,7 +42,7 @@ const CTASection = () => {
               <div className="space-y-3 mb-6">
                 <div className="flex items-center gap-2 text-primary-foreground/80">
                   <MapPin className="h-4 w-4 text-primary" />
-                  <span>مستشفى غريان المركزي، غريان، ليبيا</span>
+                  <span>مستشفى غريان التعليمي، غريان، ليبيا</span>
                 </div>
                 <div className="flex items-center gap-2 text-primary-foreground/80">
                   <Phone className="h-4 w-4 text-primary" />

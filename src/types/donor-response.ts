@@ -21,12 +21,24 @@ export enum ResponseStatus {
  * Used for display in the UI
  */
 export const ResponseStatusLabels: Record<ResponseStatus, string> = {
-  [ResponseStatus.Interested]: 'مهتم',
-  [ResponseStatus.Confirmed]: 'مؤكد',
+  [ResponseStatus.Interested]: 'مهتم بالتبرع',
+  [ResponseStatus.Confirmed]: 'تم التأكيد',
   [ResponseStatus.Donated]: 'تم التبرع',
   [ResponseStatus.Rejected]: 'مرفوض',
   [ResponseStatus.NoShow]: 'لم يحضر',
   [ResponseStatus.Cancelled]: 'ملغى'
+};
+
+/**
+ * Badge variant mapping for each state
+ */
+export const ResponseStatusVariant: Record<ResponseStatus, 'default' | 'secondary' | 'success' | 'destructive' | 'outline'> = {
+  [ResponseStatus.Interested]: 'default',
+  [ResponseStatus.Confirmed]: 'success',
+  [ResponseStatus.Donated]: 'success',
+  [ResponseStatus.Rejected]: 'destructive',
+  [ResponseStatus.NoShow]: 'destructive',
+  [ResponseStatus.Cancelled]: 'outline'
 };
 
 /**
@@ -37,13 +49,13 @@ export interface DonorResponse {
   responseId: number;
   donorId: number;
   donorName: string;
-  donorPhone: string;
+  donorPhone?: string;
   bloodTypeName: string;
   requestId: number;
-  patientName: string;
-  urgencyLevel: UrgencyLevel;
+  patientName?: string;
+  urgencyLevel?: UrgencyLevel;
   status: ResponseStatus;
-  statusDescription: string;
+  statusDescription?: string;
   notes?: string;
   rejectionReason?: string;
   responseDate: string; // ISO 8601
@@ -81,13 +93,13 @@ export interface ApiDonorResponse {
   responseID: number;
   donorID: number;
   donorName: string;
-  donorPhone: string;
+  donorPhone?: string;
   bloodTypeName: string;
   requestID: number;
-  patientName: string;
-  urgencyLevel: number; // 1=Normal, 2=Urgent, 3=Emergency
+  patientName?: string;
+  urgencyLevel?: number; // 1=Normal, 2=Urgent, 3=Emergency
   status: number; // 1-6
-  statusDescription: string;
+  statusDescription?: string;
   notes?: string;
   rejectionReason?: string;
   responseDate: string;
@@ -95,4 +107,24 @@ export interface ApiDonorResponse {
   donationID?: number;
   createdAt: string;
   updatedAt?: string;
+}
+
+/**
+ * Donor eligibility information based on last donation date
+ */
+export interface DonorEligibility {
+  isEligible: boolean;
+  lastDonationDate: Date | null;
+  nextEligibleDate: Date | null;
+  daysUntilEligible: number;
+}
+
+/**
+ * Result of responding to a blood request
+ */
+export interface RespondResult {
+  success: boolean;
+  donationId?: number;
+  error?: string;
+  errorType?: 'auth' | 'compatibility' | 'eligibility' | 'api' | 'unknown';
 }

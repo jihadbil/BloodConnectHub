@@ -10,9 +10,9 @@ import type {
   CreateDonorResponseRequest, 
   UpdateResponseStatusRequest,
   DonorResponse,
-  ResponseStatus
+  ResponseStatus,
+  RespondResult
 } from '@/types/donor-response';
-import type { RespondResult } from '@/types/blood-request-response';
 
 /**
  * Hook لتنفيذ العمليات على الاستجابات (إنشاء، تحديث، إلغاء)

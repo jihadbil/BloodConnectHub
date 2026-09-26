@@ -99,7 +99,7 @@ export default function ReportsDonors() {
                             <Alert><AlertDescription>لا توجد بيانات</AlertDescription></Alert>
                         ) : (
                             <div className="flex flex-col items-center gap-4">
-                                <ResponsiveContainer width="100%" height={220}>
+                                <ResponsiveContainer width="100%" height={320}>
                                     <PieChart>
                                         <Pie
                                             data={[
@@ -110,9 +110,26 @@ export default function ReportsDonors() {
                                             cy="50%"
                                             outerRadius={90}
                                             dataKey="value"
-                                            label={({ name, percent }) =>
-                                                `${name}: ${(percent * 100).toFixed(0)}%`
-                                            }
+                                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
+                                                const RADIAN = Math.PI / 180;
+                                                const radius = outerRadius + 35;
+                                                const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                                const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                                const textAnchor = x > cx ? 'start' : 'end';
+                                                return (
+                                                    <text
+                                                        x={x}
+                                                        y={y}
+                                                        fill="currentColor"
+                                                        className="text-xs font-semibold"
+                                                        textAnchor={textAnchor}
+                                                        dominantBaseline="central"
+                                                    >
+                                                        {`${name}: ${(percent * 100).toFixed(0)}%`}
+                                                    </text>
+                                                );
+                                            }}
+                                            labelLine={{ stroke: 'currentColor', strokeWidth: 1, opacity: 0.5 }}
                                         >
                                             <Cell fill="#16a34a" />
                                             <Cell fill="#dc2626" />

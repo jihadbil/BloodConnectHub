@@ -39,13 +39,13 @@ const About = () => {
           <div className="container mx-auto px-4 text-center">
             <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
               <Building2 className="h-4 w-4" />
-              <span>مستشفى غريان المركزي</span>
+              <span>مستشفى غريان التعليمي</span>
             </div>
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-6">
               من نحن
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              بنك الدم في مستشفى غريان المركزي - شريكك في إنقاذ الأرواح
+              بنك الدم في مستشفى غريان التعليمي - شريكك في إنقاذ الأرواح
             </p>
           </div>
         </section>
@@ -59,7 +59,7 @@ const About = () => {
                   عن بنك الدم
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  يعد بنك الدم في مستشفى غريان المركزي من أهم الأقسام الحيوية في المستشفى، 
+                  يعد بنك الدم في مستشفى غريان التعليمي من أهم الأقسام الحيوية في المستشفى، 
                   حيث يقدم خدماته على مدار الساعة لتوفير الدم الآمن للمرضى المحتاجين.
                 </p>
                 <p className="text-muted-foreground leading-relaxed mb-4">
@@ -110,7 +110,7 @@ const About = () => {
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
                   تقديم خدمات نقل الدم بأعلى معايير الجودة والسلامة، وتسهيل عملية التبرع 
-                  للمتبرعين، وضمان توفر الدم لجميع المرضى المحتاجين في مستشفى غريان المركزي.
+                  للمتبرعين، وضمان توفر الدم لجميع المرضى المحتاجين في مستشفى غريان التعليمي.
                 </p>
               </Card>
             </div>
@@ -153,7 +153,7 @@ const About = () => {
                 </div>
                 <div>
                   <p className="font-medium text-foreground">العنوان</p>
-                  <p className="text-muted-foreground text-sm">مستشفى غريان المركزي، غريان، ليبيا</p>
+                  <p className="text-muted-foreground text-sm">مستشفى غريان التعليمي، غريان، ليبيا</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">

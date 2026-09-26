@@ -1,7 +1,7 @@
 // React Query hook for Donor Responses API
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { donorResponsesApi } from '@/api/donorResponses';
-import type { DonorResponse } from '@/types/donor-response';
+import type { DonorResponse, CreateDonorResponseRequest, UpdateResponseStatusRequest } from '@/types/donor-response';
 
 // Query keys for cache management
 export const donorResponseKeys = {
@@ -108,5 +108,54 @@ export function useDonorResponse(id: number) {
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: false,
     retry: 2,
+  });
+}
+
+/**
+ * Hook لإنشاء استجابة جديدة من المتبرع
+ */
+export function useCreateDonorResponse() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateDonorResponseRequest) =>
+      donorResponsesApi.create(data),
+    onSuccess: (_, variables) => {
+      // إبطال cache استجابات هذا الطلب
+      queryClient.invalidateQueries({
+        queryKey: donorResponseKeys.byRequest(variables.requestId)
+      });
+      // إبطال cache استجابات هذا المتبرع
+      queryClient.invalidateQueries({
+        queryKey: donorResponseKeys.byDonor(variables.donorId)
+      });
+    },
+  });
+}
+
+/**
+ * Hook لإلغاء استجابة من قِبل المتبرع
+ */
+export function useCancelDonorResponse() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      donorResponsesApi.cancel(id, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: donorResponseKeys.all });
+    },
+  });
+}
+
+/**
+ * Hook لتحديث حالة الاستجابة من قِبل الموظف
+ */
+export function useUpdateResponseStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: UpdateResponseStatusRequest }) =>
+      donorResponsesApi.updateStatus(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: donorResponseKeys.all });
+    },
   });
 }

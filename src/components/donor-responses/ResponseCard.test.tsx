@@ -46,7 +46,7 @@ describe('ResponseCard', () => {
       render(<ResponseCard response={response} />);
 
       // Validates: Requirement 2.1 - status badge
-      expect(screen.getByText('مهتم')).toBeInTheDocument(); // Interested status
+      expect(screen.getByText('مهتم بالتبرع')).toBeInTheDocument(); // Interested status
     });
 
     it('should display notes when present', () => {

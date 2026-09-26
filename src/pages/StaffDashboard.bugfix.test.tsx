@@ -220,7 +220,7 @@ describe('StaffDashboard - Bug Condition Exploration', () => {
     expect(unitCells.length).toBeGreaterThan(0);
 
     // Assert: Urgency badges should be displayed
-    expect(screen.getByText('حرج')).toBeInTheDocument(); // Emergency
+    expect(screen.getByText('طارئ')).toBeInTheDocument(); // Emergency
     expect(screen.getByText('عاجل')).toBeInTheDocument(); // Urgent
     expect(screen.getByText('عادي')).toBeInTheDocument(); // Normal
   });

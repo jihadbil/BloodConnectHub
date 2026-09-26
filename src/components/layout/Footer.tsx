@@ -25,13 +25,13 @@ const Footer = () => {
               <Droplet className="h-8 w-8 text-primary" />
               <div className="flex flex-col">
                 <span className="text-lg font-bold leading-tight">
-                  مستشفى غريان <span className="text-primary">المركزي</span>
+                  مستشفى غريان <span className="text-primary">التعليمي</span>
                 </span>
                 <span className="text-xs text-primary-foreground/60">بنك الدم</span>
               </div>
             </Link>
             <p className="text-primary-foreground/70 text-sm leading-relaxed">
-              بنك الدم في مستشفى غريان المركزي - نربط بين المتبرعين والمرضى لإنقاذ الأرواح.
+              بنك الدم في مستشفى غريان التعليمي - نربط بين المتبرعين والمرضى لإنقاذ الأرواح.
             </p>
           </div>
 
@@ -83,7 +83,7 @@ const Footer = () => {
               </li>
               <li className="flex items-center gap-2 text-sm text-primary-foreground/70">
                 <MapPin className="h-4 w-4 text-primary" />
-                <span>مستشفى غريان المركزي، غريان، ليبيا</span>
+                <span>مستشفى غريان التعليمي، غريان، ليبيا</span>
               </li>
             </ul>
             <div className="flex items-center gap-4 mt-4">
@@ -102,7 +102,7 @@ const Footer = () => {
 
         <div className="border-t border-primary-foreground/20 mt-8 pt-8 text-center">
           <p className="text-primary-foreground/60 text-sm">
-            © {new Date().getFullYear()} مستشفى غريان المركزي - بنك الدم. جميع الحقوق محفوظة. مشروع جامعي.
+            © {new Date().getFullYear()} مستشفى غريان التعليمي - بنك الدم. جميع الحقوق محفوظة. مشروع جامعي.
           </p>
         </div>
       </div>

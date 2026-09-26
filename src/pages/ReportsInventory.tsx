@@ -231,7 +231,7 @@ export default function ReportsInventory() {
                                         <tr className="border-b bg-gray-50">
                                             <th className="text-right p-2 font-semibold">فصيلة الدم</th>
                                             <th className="text-right p-2 font-semibold">الوحدات</th>
-                                            <th className="text-right p-2 font-semibold">الكمية المهدرة (مل)</th>
+                                            <th className="text-right p-2 font-semibold">الكمية المهدرة (وحدة)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -242,7 +242,7 @@ export default function ReportsInventory() {
                                                 </td>
                                                 <td className="p-2 font-mono">{e.expiredUnitCount}</td>
                                                 <td className="p-2 text-red-600 font-mono">
-                                                    {e.totalQuantityWasted.toLocaleString('ar-EG')} مل
+                                                    {e.totalQuantityWasted.toLocaleString('ar-EG')} وحدة
                                                 </td>
                                             </tr>
                                         ))}
@@ -268,8 +268,8 @@ export default function ReportsInventory() {
                                 <thead>
                                     <tr className="border-b bg-gray-50">
                                         <th className="text-right p-3 font-semibold">فصيلة الدم</th>
-                                        <th className="text-right p-3 font-semibold">المستهلك الكلي (مل)</th>
-                                        <th className="text-right p-3 font-semibold">متوسط يومي (مل)</th>
+                                        <th className="text-right p-3 font-semibold">المستهلك الكلي (وحدة)</th>
+                                        <th className="text-right p-3 font-semibold">متوسط يومي (وحدة)</th>
                                         <th className="text-right p-3 font-semibold">المخزون الحالي</th>
                                         <th className="text-right p-3 font-semibold">أيام حتى النفاد</th>
                                     </tr>

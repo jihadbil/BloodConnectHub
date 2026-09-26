@@ -197,3 +197,37 @@ export function useCancelBloodRequest() {
     },
   });
 }
+
+/**
+ * حذف طلب دم
+ */
+export function useDeleteBloodRequest() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (id: number) => bloodRequestsApi.delete(id),
+    onSuccess: (response) => {
+      if (response.success) {
+        queryClient.invalidateQueries({ queryKey: bloodRequestKeys.all });
+        toast({
+          title: 'تم بنجاح',
+          description: response.message || 'تم حذف طلب الدم بنجاح',
+        });
+      } else {
+        toast({
+          title: 'خطأ',
+          description: response.message || 'فشل في حذف طلب الدم',
+          variant: 'destructive',
+        });
+      }
+    },
+    onError: () => {
+      toast({
+        title: 'خطأ',
+        description: 'فشل الاتصال بالخادم',
+        variant: 'destructive',
+      });
+    },
+  });
+}

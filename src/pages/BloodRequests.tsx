@@ -5,23 +5,40 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { MapPin, Clock, Droplet, Search, Building2, AlertCircle, RefreshCw } from "lucide-react";
-import { useBloodRequests, useUrgentBloodRequests } from "@/hooks/useBloodRequests";
-import { BLOOD_TYPE_MAP, BloodRequest } from "@/types/api";
+import { MapPin, Clock, Droplet, Search, Building2, AlertCircle, RefreshCw, Plus, Loader2, Trash2, Power, PowerOff } from "lucide-react";
+import { useBloodRequests, useUrgentBloodRequests, useCreateBloodRequest, useUpdateBloodRequestStatus, useDeleteBloodRequest } from "@/hooks/useBloodRequests";
+import { usePatients } from "@/hooks/usePatients";
+import { useAuth } from "@/hooks/useAuth";
+import { BLOOD_TYPE_MAP, BLOOD_TYPE_REVERSE_MAP, BloodRequest, RequestStatus } from "@/types/api";
+import type { UrgencyLevel } from "@/types/api";
 import { mapUrgencyLevel, formatTimeAgo, mapRequestStatus } from "@/lib/utils";
 import { ResponseDialog } from "@/components/blood-requests/ResponseDialog";
 
+const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+const departments = [
+  { value: "الطوارئ", label: "الطوارئ" },
+  { value: "الجراحة", label: "الجراحة" },
+  { value: "الباطنة", label: "الباطنة" },
+  { value: "النساء والولادة", label: "النساء والولادة" },
+  { value: "العظام", label: "العظام" },
+  { value: "الأطفال", label: "الأطفال" },
+  { value: "العناية المركزة", label: "العناية المركزة" },
+];
+
 const urgencyConfig = {
-  critical: { label: "حرج", variant: "destructive" as const, className: "bg-destructive text-white animate-pulse" },
+  critical: { label: "طارئ", variant: "destructive" as const, className: "bg-destructive text-white animate-pulse" },
   urgent: { label: "عاجل", variant: "outline" as const, className: "border-orange-500 text-orange-600 bg-orange-50" },
   normal: { label: "عادي", variant: "secondary" as const, className: "" },
 };
 
-const bloodTypes = ["جميع الفصائل", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
-const urgencyLevels = ["جميع المستويات", "حرج", "عاجل", "عادي"];
+
+const urgencyLevels = ["جميع المستويات", "طارئ", "عاجل", "عادي"];
 
 // Loading Skeleton Component
 const LoadingSkeleton = () => (
@@ -88,9 +105,56 @@ const BloodRequests = () => {
   const [isRespondDialogOpen, setIsRespondDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<BloodRequest | null>(null);
 
+  // Dialog state for creating new request
+  const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
+  const [newRequest, setNewRequest] = useState({
+    patientId: "",
+    bloodType: "",
+    unitsNeeded: "1",
+    department: "",
+    urgencyLevel: "" as UrgencyLevel | "",
+    notes: ""
+  });
+
+  // Auth
+  const { isStaff } = useAuth();
+
   // جلب البيانات من API
   const { data, isLoading, error, refetch } = useBloodRequests(page, pageSize);
   const { data: urgentData } = useUrgentBloodRequests();
+  const { data: patientsData, isLoading: patientsLoading } = usePatients(1, 100);
+  const patients = patientsData?.data?.items || [];
+
+  const createRequest = useCreateBloodRequest();
+  const statusMutation = useUpdateBloodRequestStatus();
+  const deleteMutation = useDeleteBloodRequest();
+  const [selectedActionId, setSelectedActionId] = useState<number | null>(null);
+
+  const handleToggleStatus = async (id: number, status: RequestStatus) => {
+    setSelectedActionId(id);
+    try {
+      await statusMutation.mutateAsync({ id, status });
+      refetch();
+    } catch (err) {
+      console.error("Failed to update status:", err);
+    } finally {
+      setSelectedActionId(null);
+    }
+  };
+
+  const handleDeleteRequest = async (id: number) => {
+    if (window.confirm("هل أنت متأكد من رغبتك في حذف طلب الدم هذا نهائياً؟")) {
+      setSelectedActionId(id);
+      try {
+        await deleteMutation.mutateAsync(id);
+        refetch();
+      } catch (err) {
+        console.error("Failed to delete request:", err);
+      } finally {
+        setSelectedActionId(null);
+      }
+    }
+  };
 
   // Handle respond to request
   const handleRespond = (request: BloodRequest) => {
@@ -100,6 +164,34 @@ const BloodRequests = () => {
 
   // Handle successful response - refresh the list
   const handleResponseSuccess = () => {
+    refetch();
+  };
+
+  // معالجة إنشاء طلب جديد
+  const handleCreateRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRequest.patientId || !newRequest.bloodType || !newRequest.urgencyLevel) return;
+
+    const urgencyMap: Record<string, number> = {
+      'Normal': 1,
+      'Urgent': 2,
+      'Emergency': 3
+    };
+
+    const requestData = {
+      patientID: parseInt(newRequest.patientId),
+      bloodTypeID: BLOOD_TYPE_REVERSE_MAP[newRequest.bloodType],
+      quantityNeeded: parseInt(newRequest.unitsNeeded),
+      urgencyLevel: urgencyMap[newRequest.urgencyLevel],
+      requiredDate: new Date().toISOString(),
+      notes: newRequest.department && newRequest.notes
+        ? `${newRequest.department} - ${newRequest.notes}`
+        : newRequest.department || newRequest.notes || null
+    };
+
+    await createRequest.mutateAsync(requestData as any);
+    setIsNewRequestOpen(false);
+    setNewRequest({ patientId: "", bloodType: "", unitsNeeded: "1", department: "", urgencyLevel: "", notes: "" });
     refetch();
   };
 
@@ -150,22 +242,170 @@ const BloodRequests = () => {
       <main className="container mx-auto px-4 py-8">
         {/* Page Header */}
         <div className="mb-8">
-          <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-4">
-            <Building2 className="h-4 w-4" />
-            <span>مستشفى غريان المركزي</span>
-          </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
-            طلبات <span className="text-primary">الدم</span>
-          </h1>
-          <p className="text-muted-foreground">
-            تصفح طلبات الدم الحالية في مستشفى غريان المركزي واستجب للحالات التي تناسب فصيلة دمك
-          </p>
-          {urgentCount > 0 && (
-            <div className="mt-4 inline-flex items-center gap-2 bg-destructive/10 text-destructive px-4 py-2 rounded-lg text-sm font-medium animate-pulse">
-              <AlertCircle className="h-4 w-4" />
-              <span>{urgentCount} طلب عاجل يحتاج مساعدتك!</span>
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-4">
+                <Building2 className="h-4 w-4" />
+                <span>مستشفى غريان التعليمي</span>
+              </div>
+              <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
+                طلبات <span className="text-primary">الدم</span>
+              </h1>
+              <p className="text-muted-foreground">
+                تصفح طلبات الدم الحالية في مستشفى غريان التعليمي واستجب للحالات التي تناسب فصيلة دمك
+              </p>
+              {urgentCount > 0 && (
+                <div className="mt-4 inline-flex items-center gap-2 bg-destructive/10 text-destructive px-4 py-2 rounded-lg text-sm font-medium animate-pulse">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>{urgentCount} طلب عاجل يحتاج مساعدتك!</span>
+                </div>
+              )}
             </div>
-          )}
+
+            <div className="flex flex-wrap items-center gap-3 shrink-0 self-start md:self-center">
+              <Button
+                variant="outline"
+                size="lg"
+                className="gap-2"
+                onClick={() => refetch()}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                تحديث البيانات
+              </Button>
+
+              {isStaff && (
+                <Dialog open={isNewRequestOpen} onOpenChange={setIsNewRequestOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="lg" className="gap-2">
+                      <Plus className="h-5 w-5" />
+                      طلب دم جديد
+                    </Button>
+                  </DialogTrigger>
+                <DialogContent className="max-w-md" dir="rtl">
+                  <DialogHeader>
+                    <DialogTitle>إنشاء طلب دم جديد</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateRequest} className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label>المريض</Label>
+                      <Select
+                        value={newRequest.patientId}
+                        onValueChange={(v) => setNewRequest(prev => ({ ...prev, patientId: v }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر المريض" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" className="max-h-[200px]">
+                          {patientsLoading ? (
+                            <div className="p-2 text-center text-sm text-muted-foreground">جاري التحميل...</div>
+                          ) : patients.length === 0 ? (
+                            <div className="p-2 text-center text-sm text-muted-foreground">لا يوجد مرضى مسجلين. يرجى إضافة مرضى أولاً.</div>
+                          ) : (
+                            patients.map((patient: any) => (
+                              <SelectItem
+                                key={patient.patientID || patient.patientId}
+                                value={(patient.patientID || patient.patientId)?.toString() || ""}
+                              >
+                                {patient.fullName} - {patient.nationalID || patient.nationalId}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>فصيلة الدم المطلوبة</Label>
+                        <Select
+                          value={newRequest.bloodType}
+                          onValueChange={(v) => setNewRequest(prev => ({ ...prev, bloodType: v }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="اختر الفصيلة" />
+                          </SelectTrigger>
+                          <SelectContent position="popper">
+                            {bloodTypes.map((type) => (
+                              <SelectItem key={type} value={type}>{type}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>عدد الوحدات</Label>
+                        <input
+                          type="number"
+                          min="1"
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                          value={newRequest.unitsNeeded}
+                          onChange={(e) => setNewRequest(prev => ({ ...prev, unitsNeeded: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>القسم</Label>
+                        <Select
+                          value={newRequest.department}
+                          onValueChange={(v) => setNewRequest(prev => ({ ...prev, department: v }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="اختر القسم" />
+                          </SelectTrigger>
+                          <SelectContent position="popper">
+                            {departments.map((dept) => (
+                              <SelectItem key={dept.value} value={dept.value}>{dept.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>مستوى الاستعجال</Label>
+                        <Select
+                          value={newRequest.urgencyLevel}
+                          onValueChange={(v) => setNewRequest(prev => ({ ...prev, urgencyLevel: v as UrgencyLevel }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="اختر المستوى" />
+                          </SelectTrigger>
+                          <SelectContent position="popper">
+                            <SelectItem value="Emergency">طارئ - فوري</SelectItem>
+                            <SelectItem value="Urgent">عاجل</SelectItem>
+                            <SelectItem value="Normal">عادي</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>ملاحظات إضافية</Label>
+                      <Textarea
+                        placeholder="أي معلومات إضافية عن الحالة..."
+                        value={newRequest.notes}
+                        onChange={(e) => setNewRequest(prev => ({ ...prev, notes: e.target.value }))}
+                      />
+                    </div>
+                    <div className="flex gap-3">
+                      <Button
+                        type="submit"
+                        className="flex-1"
+                        disabled={createRequest.isPending || !newRequest.patientId || !newRequest.bloodType || !newRequest.urgencyLevel}
+                      >
+                        {createRequest.isPending ? (
+                          <><Loader2 className="h-4 w-4 ml-2 animate-spin" />جاري الإنشاء...</>
+                        ) : (
+                          "نشر الطلب"
+                        )}
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => setIsNewRequestOpen(false)}>
+                        إلغاء
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+          </div>
         </div>
 
         {/* Filters */}
@@ -186,6 +426,7 @@ const BloodRequests = () => {
                   <SelectValue placeholder="فصيلة الدم" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="جميع الفصائل">الكل</SelectItem>
                   {bloodTypes.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}
@@ -224,7 +465,7 @@ const BloodRequests = () => {
           <div className="flex items-center gap-4 text-sm">
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-destructive" />
-              حرج
+              طارئ
             </span>
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-warning" />
@@ -259,7 +500,7 @@ const BloodRequests = () => {
                 const urgency = urgencyConfig[request.urgency as keyof typeof urgencyConfig];
                 // Find the original API request data for this transformed request
                 const originalRequest = data?.data?.items?.find(r => r.requestId === request.id);
-                
+
                 return (
                   <Card
                     key={request.id}
@@ -280,7 +521,7 @@ const BloodRequests = () => {
                             <CardTitle className="text-lg">{request.department}</CardTitle>
                             <div className="flex items-center gap-1 text-muted-foreground text-sm mt-1">
                               <MapPin className="h-3 w-3" />
-                              <span>مستشفى غريان المركزي</span>
+                              <span>مستشفى غريان التعليمي</span>
                             </div>
                           </div>
                         </div>
@@ -310,14 +551,54 @@ const BloodRequests = () => {
                         <Clock className="h-3 w-3" />
                         <span>{request.timeAgo}</span>
                       </div>
-                      <Button
-                        variant={request.urgency === "critical" ? "urgent" : "default"}
-                        className="w-full"
-                        onClick={() => originalRequest && handleRespond(originalRequest)}
-                        disabled={!originalRequest}
-                      >
-                        استجب للطلب
-                      </Button>
+                      {isStaff ? (
+                        <div className="flex flex-col gap-2 w-full mt-2">
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <Select
+                                value={request.status}
+                                onValueChange={(value) => handleToggleStatus(request.id, value as RequestStatus)}
+                                disabled={statusMutation.isPending && selectedActionId === request.id}
+                              >
+                                <SelectTrigger className="w-full text-xs h-9 bg-background border-border">
+                                  {statusMutation.isPending && selectedActionId === request.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin ml-2" />
+                                  ) : null}
+                                  <SelectValue placeholder="تغيير الحالة" />
+                                </SelectTrigger>
+                                <SelectContent dir="rtl">
+                                  <SelectItem value="Pending">قيد الانتظار (نشط)</SelectItem>
+                                  <SelectItem value="Fulfilled">تم التوفير</SelectItem>
+                                  <SelectItem value="PartiallyFulfilled">تم التوفير جزئياً</SelectItem>
+                                  <SelectItem value="Cancelled">ملغى (غير نشط)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              className="bg-rose-600 hover:bg-rose-700 h-9 w-9 shrink-0 transition-all duration-300"
+                              onClick={() => handleDeleteRequest(request.id)}
+                              disabled={deleteMutation.isPending && selectedActionId === request.id}
+                            >
+                              {deleteMutation.isPending && selectedActionId === request.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          variant={request.urgency === "critical" ? "urgent" : "default"}
+                          className="w-full"
+                          onClick={() => originalRequest && handleRespond(originalRequest)}
+                          disabled={!originalRequest}
+                        >
+                          استجب للطلب
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 );

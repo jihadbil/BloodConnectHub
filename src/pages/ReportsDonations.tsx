@@ -173,7 +173,7 @@ export default function ReportsDonations() {
                         {quantityLoading ? (
                             <SectionSkeleton />
                         ) : (
-                            <ResponsiveContainer width="100%" height={240}>
+                            <ResponsiveContainer width="100%" height={350}>
                                 <BarChart data={quantities} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                                     <XAxis dataKey="bloodType" tick={{ fontSize: 13 }} />
@@ -202,7 +202,7 @@ export default function ReportsDonations() {
                         {bloodTypeLoading ? (
                             <SectionSkeleton />
                         ) : (
-                            <ResponsiveContainer width="100%" height={240}>
+                            <ResponsiveContainer width="100%" height={350}>
                                 <PieChart>
                                     <Pie
                                         data={byBloodType}
@@ -211,9 +211,26 @@ export default function ReportsDonations() {
                                         outerRadius={90}
                                         dataKey="donationCount"
                                         nameKey="bloodType"
-                                        label={({ bloodType, percentage }) =>
-                                            `${bloodType} ${percentage.toFixed(0)}%`
-                                        }
+                                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percentage, bloodType }) => {
+                                            const RADIAN = Math.PI / 180;
+                                            const radius = outerRadius + 35;
+                                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                            const textAnchor = x > cx ? 'start' : 'end';
+                                            return (
+                                                <text
+                                                    x={x}
+                                                    y={y}
+                                                    fill="currentColor"
+                                                    className="text-xs font-semibold"
+                                                    textAnchor={textAnchor}
+                                                    dominantBaseline="central"
+                                                >
+                                                    {`${bloodType} ${percentage.toFixed(0)}%`}
+                                                </text>
+                                            );
+                                        }}
+                                        labelLine={{ stroke: 'currentColor', strokeWidth: 1, opacity: 0.5 }}
                                     >
                                         {byBloodType.map((_e, i) => (
                                             <Cell key={i} fill={BLOOD_COLORS[i % BLOOD_COLORS.length]} />

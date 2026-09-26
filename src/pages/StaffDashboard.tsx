@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
+import NotificationBell from "@/components/notifications/NotificationBell";
 import Footer from "@/components/layout/Footer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,10 @@ import {
 import { useBloodRequests, usePendingBloodRequests, useCreateBloodRequest, useCancelBloodRequest } from "@/hooks/useBloodRequests";
 import { useDonors } from "@/hooks/useDonors";
 import { usePatients } from "@/hooks/usePatients";
+import { useQueries } from "@tanstack/react-query";
+import { useUpdateResponseStatus } from "@/hooks/useDonorResponses";
+import { donorResponsesApi } from "@/api/donorResponses";
+import { ResponseStatus, ResponseStatusLabels } from "@/types/donor-response";
 import { BLOOD_TYPE_MAP, BLOOD_TYPE_REVERSE_MAP } from "@/types/api";
 import type { UrgencyLevel } from "@/types/api";
 import { mapUrgencyLevel, formatDate, formatTimeAgo } from "@/lib/utils";
@@ -54,7 +59,7 @@ const departments = [
 ];
 
 const urgencyConfig = {
-  critical: { label: "حرج", variant: "destructive" as const, className: "border-red-500 text-red-700 bg-red-50" },
+  critical: { label: "طارئ", variant: "destructive" as const, className: "border-red-500 text-red-700 bg-red-50" },
   urgent: { label: "عاجل", variant: "outline" as const, className: "border-orange-500 text-orange-600 bg-orange-50" },
   normal: { label: "عادي", variant: "secondary" as const, className: "" },
 };
@@ -119,6 +124,75 @@ const StaffDashboard = () => {
   const createRequest = useCreateBloodRequest();
   const cancelRequest = useCancelBloodRequest();
 
+  const [selectedResponseForReject, setSelectedResponseForReject] = useState<number | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const updateResponseStatus = useUpdateResponseStatus();
+
+  // IDs of active requests
+  const activeRequestIds = pendingRequestsData?.data?.map(req => req.requestId) || [];
+
+  // Fetch responses for all active requests in parallel
+  const responsesQueries = useQueries({
+    queries: activeRequestIds.map(requestId => ({
+      queryKey: ['donorResponses', 'list', 'request', requestId],
+      queryFn: async () => {
+        const result = await donorResponsesApi.getByRequestId(requestId);
+        return result.success ? result.data || [] : [];
+      },
+      enabled: activeRequestIds.length > 0,
+    }))
+  });
+
+  // Combine and flatten all responses that are 'Interested'
+  const allInterestedResponses = responsesQueries
+    .flatMap(q => q.data || [])
+    .filter(res => res.status === ResponseStatus.Interested);
+
+  const handleConfirmResponse = async (id: number) => {
+    if (confirm("هل أنت متأكد من تأكيد استجابة هذا المتبرع؟")) {
+      try {
+        const result = await updateResponseStatus.mutateAsync({
+          id,
+          data: { status: ResponseStatus.Confirmed, notes: "تم التأكيد من قبل الموظف" }
+        });
+        if (result.success) {
+          alert("تم تأكيد الاستجابة بنجاح");
+        } else {
+          alert(result.message || "فشل في تأكيد الاستجابة");
+        }
+      } catch (err: any) {
+        alert(err?.message || "حدث خطأ أثناء تأكيد الاستجابة");
+      }
+    }
+  };
+
+  const handleRejectResponse = async () => {
+    if (!selectedResponseForReject) return;
+    if (!rejectionReason.trim()) {
+      alert("يرجى إدخال سبب الرفض");
+      return;
+    }
+
+    try {
+      const result = await updateResponseStatus.mutateAsync({
+        id: selectedResponseForReject,
+        data: { 
+          status: ResponseStatus.Rejected, 
+          notes: `تم الرفض: ${rejectionReason.trim()}` 
+        }
+      });
+      if (result.success) {
+        alert("تم رفض الاستجابة بنجاح");
+        setSelectedResponseForReject(null);
+        setRejectionReason("");
+      } else {
+        alert(result.message || "فشل في رفض الاستجابة");
+      }
+    } catch (err: any) {
+      alert(err?.message || "حدث خطأ أثناء رفض الاستجابة");
+    }
+  };
+
   // تحويل البيانات
   const activeRequests = pendingRequestsData?.data?.map(req => {
     const rawReq = req as any;
@@ -150,16 +224,7 @@ const StaffDashboard = () => {
 
   const patients = patientsData?.data?.items || [];
 
-  // Debug: log patients data
-  console.log('Patients Data:', patientsData);
-  console.log('Patients Array:', patients);
-  console.log('Patients Count:', patients.length);
-  if (patients.length > 0) {
-    console.log('First Patient:', patients[0]);
-    console.log('Patient Keys:', Object.keys(patients[0]));
-  }
 
-  // الإحصائيات
   const stats = {
     activeRequests: pendingRequestsData?.data?.length || 0,
     completedRequests: (requestsData?.data?.totalCount || 0) - (pendingRequestsData?.data?.length || 0),
@@ -182,11 +247,11 @@ const StaffDashboard = () => {
       return;
     }
 
-    // تحويل urgencyLevel إلى رقم: Normal=0, Urgent=1, Emergency=2
+    // تحويل urgencyLevel إلى رقم: Normal=1, Urgent=2, Emergency=3
     const urgencyMap: Record<string, number> = {
-      'Normal': 0,
-      'Urgent': 1,
-      'Emergency': 2
+      'Normal': 1,
+      'Urgent': 2,
+      'Emergency': 3
     };
 
     const requestData = {
@@ -199,8 +264,6 @@ const StaffDashboard = () => {
         ? `${newRequest.department} - ${newRequest.notes}`
         : newRequest.department || newRequest.notes || null
     };
-
-    console.log('Sending request:', requestData);
 
     await createRequest.mutateAsync(requestData as any);
 
@@ -242,7 +305,7 @@ const StaffDashboard = () => {
                 لوحة تحكم الموظفين
               </h1>
               <div className="flex items-center gap-2 text-muted-foreground">
-                <Badge variant="secondary">مستشفى غريان المركزي</Badge>
+                <Badge variant="secondary">مستشفى غريان التعليمي</Badge>
                 <span className="flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
                   غريان، ليبيا
@@ -352,7 +415,7 @@ const StaffDashboard = () => {
                           <SelectValue placeholder="اختر المستوى" />
                         </SelectTrigger>
                         <SelectContent position="popper">
-                          <SelectItem value="Emergency">حرج - فوري</SelectItem>
+                          <SelectItem value="Emergency">طارئ - فوري</SelectItem>
                           <SelectItem value="Urgent">عاجل</SelectItem>
                           <SelectItem value="Normal">عادي</SelectItem>
                         </SelectContent>
@@ -389,9 +452,7 @@ const StaffDashboard = () => {
                 </form>
               </DialogContent>
             </Dialog>
-            <Button variant="outline" size="icon">
-              <Bell className="h-4 w-4" />
-            </Button>
+            <NotificationBell />
             <Button variant="ghost" size="icon">
               <Settings className="h-4 w-4" />
             </Button>
@@ -461,8 +522,9 @@ const StaffDashboard = () => {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="requests" className="space-y-4">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-lg grid-cols-3">
             <TabsTrigger value="requests">طلبات الدم</TabsTrigger>
+            <TabsTrigger value="responses">استجابات المتبرعين</TabsTrigger>
             <TabsTrigger value="donors">المتبرعين</TabsTrigger>
           </TabsList>
 
@@ -579,6 +641,129 @@ const StaffDashboard = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Donor Responses Tab */}
+          <TabsContent value="responses">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>استجابات المتبرعين الجديدة</CardTitle>
+                  <CardDescription>
+                    المتبرعون الذين أبدو اهتمامهم بالتبرع للطلبات النشطة ويحتاجون إلى تأكيد
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {allInterestedResponses.length === 0 ? (
+                  <div className="text-center py-8">
+                    <CheckCircle2 className="h-12 w-12 text-success mx-auto mb-4" />
+                    <p className="text-lg font-medium">لا توجد استجابات جديدة قيد الانتظار</p>
+                    <p className="text-muted-foreground">تمت معالجة جميع استجابات المتبرعين</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>اسم المتبرع</TableHead>
+                          <TableHead>فصيلة الدم</TableHead>
+                          <TableHead>الطلب</TableHead>
+                          <TableHead>تاريخ الاستجابة</TableHead>
+                          <TableHead>ملاحظات المتبرع</TableHead>
+                          <TableHead>الإجراءات</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {allInterestedResponses.map((response) => (
+                          <TableRow key={response.responseId}>
+                            <TableCell className="font-semibold text-foreground">
+                              {response.donorName}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1.5">
+                                <Droplet className="h-4 w-4 text-primary fill-primary" />
+                                <span className="font-bold">{response.bloodTypeName}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {response.patientName ? `المريض: ${response.patientName}` : `طلب #${response.requestId}`}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {formatDate(response.responseDate || response.createdAt)}
+                            </TableCell>
+                            <TableCell className="max-w-[200px] truncate text-sm" title={response.notes}>
+                              {response.notes || <span className="text-muted-foreground italic">لا توجد ملاحظات</span>}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                  onClick={() => handleConfirmResponse(response.responseId)}
+                                  disabled={updateResponseStatus.isPending}
+                                >
+                                  تأكيد الاستجابة
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-destructive border-destructive hover:bg-destructive/10"
+                                  onClick={() => setSelectedResponseForReject(response.responseId)}
+                                  disabled={updateResponseStatus.isPending}
+                                >
+                                  رفض
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Rejection Reason Dialog */}
+            <Dialog open={selectedResponseForReject !== null} onOpenChange={(open) => { if (!open) { setSelectedResponseForReject(null); setRejectionReason(""); } }}>
+              <DialogContent className="max-w-md" dir="rtl">
+                <DialogHeader>
+                  <DialogTitle className="text-destructive flex items-center gap-2 font-bold">
+                    <AlertCircle className="h-5 w-5" />
+                    رفض استجابة المتبرع
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="rejection-reason">سبب الرفض</Label>
+                    <Textarea
+                      id="rejection-reason"
+                      placeholder="اكتب سبب الرفض هنا ليتم إبلاغ المتبرع به..."
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      rows={3}
+                      maxLength={500}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => { setSelectedResponseForReject(null); setRejectionReason(""); }}
+                    >
+                      إلغاء
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleRejectResponse}
+                      disabled={updateResponseStatus.isPending}
+                    >
+                      {updateResponseStatus.isPending ? "جاري الحفظ..." : "تأكيد الرفض"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Donors Tab */}

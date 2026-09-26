@@ -46,7 +46,7 @@ const OrganizationDashboard = () => {
   ];
 
   const urgencyConfig = {
-    critical: { label: "حرج", color: "bg-destructive text-destructive-foreground" },
+    critical: { label: "طارئ", color: "bg-destructive text-destructive-foreground" },
     urgent: { label: "عاجل", color: "bg-warning text-warning-foreground" },
     normal: { label: "عادي", color: "bg-success text-success-foreground" },
   };
@@ -115,7 +115,7 @@ const OrganizationDashboard = () => {
                         <SelectValue placeholder="اختر المستوى" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="critical">حرج - فوري</SelectItem>
+                        <SelectItem value="critical">طارئ - فوري</SelectItem>
                         <SelectItem value="urgent">عاجل</SelectItem>
                         <SelectItem value="normal">عادي</SelectItem>
                       </SelectContent>
